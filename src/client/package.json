@@ -1,0 +1,57 @@
+{
+  "name": "retromol-gui",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@emotion/react": "latest",
+    "@emotion/styled": "latest",
+    "@mui/icons-material": "latest",
+    "@mui/material": "latest",
+    "@mui/x-charts": "latest",
+    "@react-spring/web": "latest",
+    "@react-three/drei": "^8.20.2",
+    "@react-three/fiber": "^8.13.5",
+    "@tanstack/react-query": "^5.76.1",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "clsx": "latest",
+    "dayjs": "latest",
+    "framer-motion": "^12.6.3",
+    "html2canvas": "^1.4.1",
+    "lodash.debounce": "^4.0.8",
+    "react": "^18",
+    "react-dom": "^18",
+    "react-force-graph-2d": "^1.27.1",
+    "react-router-dom": "latest",
+    "react-window": "^1.8.11",
+    "smiles-drawer": "^2.1.7",
+    "three": "^0.175.0",
+    "typescript": "^4"
+  },
+  "devDependencies": {
+    "@types/lodash.debounce": "^4.0.9",
+    "@types/react-window": "^1.8.8",
+    "react-scripts": "latest"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "proxy": "http://localhost:4000"
+}
