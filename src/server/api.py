@@ -6,6 +6,11 @@ import time
 from flask import jsonify
 
 from routes.app import app
+from routes.query import dsn_from_env, blp as query_blp
+
+
+# Register blueprints
+app.register_blueprint(query_blp)
 
 
 @app.errorhandler(404)
@@ -72,15 +77,7 @@ def ready() -> tuple[dict[str, str], int]:
     except ImportError:
         return jsonify({"status": "psycopg not installed"}), 500
     
-    dsn = os.getenv("DATABASE_URL")
-    if not dsn:
-        # Fall back to discrete envs
-        host = os.getenv("DB_HOST", "db")
-        port = os.getenv("DB_PORT", "5432")
-        name = os.getenv("DB_NAME", "bionexus")
-        user = os.getenv("DB_USER", "app_ro")
-        pwd = os.getenv("DB_PASSWORD", "apppass_ro")
-        dsn = f"postgresql://{user}:{pwd}@{host}:{port}/{name}"
+    dsn = dsn_from_env()
 
     try:
         with psycopg.connect(dsn, connect_timeout=3) as conn:

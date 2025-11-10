@@ -21,6 +21,8 @@ export default function Home(props: { disableCustomTheme?: boolean }) {
     //     <Footer />
     //   </Box>
     // </AppTheme>
-    <div>Home page under construction</div>
+    <div>
+      <div>Home page under construction</div>
+    </div>
   );
 };
