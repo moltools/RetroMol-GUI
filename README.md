@@ -22,15 +22,17 @@ NOTE: make sure to make the scripts in `/db/init` executable (`chmod +x`) before
 
 ### Re-seed the DB
 
-Postgres will initialize once from the dump file specified in `.env` (make sure to copy `.env/example` and edit it first).
+Postgres will initialize once from the dump file specified in `.env` (make sure to copy `.env.example` and edit it first).
 
 To re-seed, run `docker compose down -v` (destroys `db_data` volume) and then `docker compose up -d --build` again.
 
 ### Check health containers
 
-#### Reachable from the frontend (local development)
+#### Reachability from the frontend
 
 ```bash
-curl -i http://localhost:4005/api/health  # should return 200 OK for backend
-curl -i http://localhost:4005/api/ready  # should return 200 OK for DB connection
+curl -i http://<server-ip>/api/health  # should return 200 OK for backend
+curl -i http://<server-ip>/api/ready  # should return 200 OK for DB connection
 ```
+
+For local development, `server-ip` equals to `localhost:4005`.
