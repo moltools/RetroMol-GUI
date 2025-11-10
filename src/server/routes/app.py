@@ -65,3 +65,7 @@ scheduler.add_job(
 
 # Shut down the scheduler when exiting the app
 atexit.register(lambda: scheduler.shutdown())
+
+
+# Import routes to register them with the app
+import api  # noqa: F401

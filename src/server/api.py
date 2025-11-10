@@ -1,8 +1,9 @@
 """API endpoints for the server."""
 
+import os
 import time
 
-from retromol.version import __version__
+from flask import jsonify
 
 from routes.app import app
 
@@ -28,16 +29,6 @@ def index() -> str:
     return app.send_static_file("index.html")
 
 
-@app.route("/api/getVersion")
-def version() -> tuple[dict[str, str], int]:
-    """
-    Get the version of the server.
-    
-    :return: a dictionary with the version information and HTTP status code
-    """
-    return {"version": __version__}, 200
-
-
 @app.route("/api/startup")
 def startup() -> tuple[dict[str, int], int]:
     """
@@ -46,8 +37,60 @@ def startup() -> tuple[dict[str, int], int]:
     :return: a dictionary with startup, current time, uptime and HTTP status code
     """
     startup_epoch = app.config["START_EPOCH"]
-    return {
+    return jsonify({
         "startup": startup_epoch,
         "current": int(time.time()),
         "uptime": int(time.time()) - startup_epoch,
-    }, 200
+    }), 200
+
+
+@app.route("/api/health", methods=["GET"])
+def health() -> tuple[dict[str, str], int]:
+    """
+    Health check endpoint.
+
+    :return: a dictionary indicating the server is healthy and HTTP status code
+    """
+    return jsonify({
+        "status": "ok",
+        "time": int(time.time()),
+        "uptime": int(time.time()) - app.config["START_EPOCH"],
+        "version": os.getenv("APP_VERSION", "unknown"),
+    }), 200
+
+
+@app.route("/api/ready", methods=["GET"])
+def ready() -> tuple[dict[str, str], int]:
+    """
+    Returns 200 only if the app can read from Postgres.
+
+    :return: a dictionary indicating readiness and HTTP status code
+    .. note:: this requires the `psycopg` package to be installed
+    """
+    try:
+        import psycopg
+    except ImportError:
+        return jsonify({"status": "psycopg not installed"}), 500
+    
+    dsn = os.getenv("DATABASE_URL")
+    if not dsn:
+        # Fall back to discrete envs
+        host = os.getenv("DB_HOST", "db")
+        port = os.getenv("DB_PORT", "5432")
+        name = os.getenv("DB_NAME", "bionexus")
+        user = os.getenv("DB_USER", "app_ro")
+        pwd = os.getenv("DB_PASSWORD", "apppass_ro")
+        dsn = f"postgresql://{user}:{pwd}@{host}:{port}/{name}"
+
+    try:
+        with psycopg.connect(dsn, connect_timeout=3) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1;")
+                cur.fetchone()
+        return jsonify({"status": "ready"}), 200
+    except Exception as e:
+        return jsonify({"status": "not ready", "error": str(e)}), 503
+        
+
+
+
