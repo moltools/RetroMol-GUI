@@ -32,15 +32,15 @@
     "zod": "3.23.8"
   },
   "devDependencies": {
+    "@craco/craco": "^7.1.0",
     "@types/lodash.debounce": "^4.0.9",
     "@types/react-window": "^1.8.8",
     "react-scripts": "^5.0.1"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "start": "DISABLE_ESLINT_PLUGIN=true craco start",
+    "build": "DISABLE_ESLINT_PLUGIN=true craco build",
+    "test": "craco test"
   },
   "browserslist": {
     "production": [
