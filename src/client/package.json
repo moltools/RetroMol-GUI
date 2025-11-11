@@ -28,7 +28,8 @@
     "react-window": "^1.8.11",
     "smiles-drawer": "^2.1.7",
     "three": "^0.175.0",
-    "typescript": "^4"
+    "typescript": "^4",
+    "zod": "^4.1.12"
   },
   "devDependencies": {
     "@types/lodash.debounce": "^4.0.9",

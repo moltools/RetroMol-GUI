@@ -8,9 +8,8 @@ import { AnimatePresence, motion } from "framer-motion";
 // Import pages
 import Home from "./pages/Home";
 import Example from "./pages/Example";
-// import Dashboard from "./pages/Dashboard";
-// import NotFound from "./pages/NotFound";
-// import Oops from "./pages/Oops";
+import Dashboard from "./pages/Dashboard";
+import NotFound from "./pages/NotFound";
 
 // Generate and store a random deviceId if it doesn"t exist already.
 const deviceIdKey = "deviceId";
@@ -50,9 +49,10 @@ const AnimatedRoutes = () => {
       <Routes location={location} key={getPageKey(location.pathname)}>
         <Route path="/" element={<Page><Home /></Page>} />
         <Route path="/example" element={<Page><Example /></Page>} />
-        {/* <Route path="/dashboard/*" element={<Page><Dashboard /></Page>} /> */}
-        {/* <Route path="/oops" element={<Page><Oops /></Page>} /> */}
-        {/* <Route path="/*" element={<Page><NotFound /></Page>} /> */}
+        <Route path="/dashboard/*" element={<Page><Dashboard /></Page>} />
+        <Route path="/oops" element={<Page><NotFound title="Something went wrong" subtitle="Something catastrophic happened. Please reach out to us on GitHub." /></Page>} />
+        <Route path="/notfound" element={<Page><NotFound title="Session not found" subtitle="The session you are looking for does not exist." /></Page>} />
+        <Route path="/*" element={<Page><NotFound /></Page>} />
       </Routes>
     </AnimatePresence>
   );

@@ -24,4 +24,4 @@ echo "DB: ${DB_USER}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
 echo
 
 # Run Flask dev server
-python -m flask --app routes.app run --host=0.0.0.0 --port="${PORT}" --debug
+python -m flask --app app run --host=0.0.0.0 --port="${PORT}" --debug

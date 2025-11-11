@@ -17,5 +17,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 ENV PORT=4000
 EXPOSE 4000
 
-# Let Flask/gunicorn find the app: "routes.app:app"
-CMD ["gunicorn", "-w", "3", "-b", "0.0.0.0:4000", "routes.app:app"]
+# Let Flask/gunicorn find the app: "app:app"
+CMD ["gunicorn", "-w", "3", "-b", "0.0.0.0:4000", "app:app"]
