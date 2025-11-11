@@ -1,6 +1,12 @@
 import React, { useEffect } from "react";
-import { Box, Chip, Drawer as MuiDrawer, ListItem, ListItemText, Stack, Typography, drawerClasses } from "@mui/material";
-import { Close as CloseIcon } from "@mui/icons-material";
+import Box from "@mui/material/Box";
+import Chip from "@mui/material/Chip";
+import MuiDrawer, { drawerClasses } from "@mui/material/Drawer";
+import ListItem from "@mui/material/ListItem";
+import ListItemText from "@mui/material/ListItemText";
+import Stack from "@mui/material/Stack";
+import Typography from "@mui/material/Typography";
+import CloseIcon from "@mui/icons-material/Close";
 import { styled, useTheme } from "@mui/material/styles";
 import { useNotifications } from "./NotificationProvider";
 

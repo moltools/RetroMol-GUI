@@ -1,12 +1,8 @@
 {
   "compilerOptions": {
     "target": "es5",
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext"
-    ],
-    "allowJs": true,
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": false,
     "skipLibCheck": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
@@ -17,8 +13,7 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "jsx": "react",
-    "types": ["node"]
+    "jsx": "react-jsx"
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist", "build", "coverage", ".next", "out", "**/*.stories.*", "**/*.test.*"]

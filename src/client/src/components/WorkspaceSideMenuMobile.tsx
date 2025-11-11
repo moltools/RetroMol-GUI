@@ -1,6 +1,7 @@
-import * as React from "react";
-import { Drawer, Stack, drawerClasses } from "@mui/material";
-import { Close as CloseIcon } from "@mui/icons-material";
+import React from "react";
+import Drawer, { drawerClasses } from "@mui/material/Drawer";
+import Stack from "@mui/material/Stack";
+import CloseIcon from "@mui/icons-material/Close";
 import { MenuContent } from "./MenuContent";
 import { NotificationDrawer } from "./NotificationDrawer";
 import { BuildVersion } from "./BuildVersion";

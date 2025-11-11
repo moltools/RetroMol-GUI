@@ -1,6 +1,11 @@
-import React from "react";
-import { Box, Container, IconButton, Link, Stack, Typography } from "@mui/material";
-import { Article as ArticleIcon, GitHub as GitHubIcon } from "@mui/icons-material";
+import Box from "@mui/material/Box";
+import Container from "@mui/material/Container";
+import IconButton from "@mui/material/IconButton";
+import Link from "@mui/material/Link";
+import Stack from "@mui/material/Stack";
+import Typography from "@mui/material/Typography";
+import ArticleIcon from "@mui/icons-material/Article";
+import GitHubIcon from "@mui/icons-material/GitHub";
 
 function Copyright() {
   return (

@@ -1,7 +1,11 @@
-import * as React from "react";
+import React from "react";
 import { styled } from "@mui/material/styles";
-import { AppBar, Toolbar as MuiToolbar, Stack, Typography, tabsClasses } from "@mui/material";
-import { MenuRounded as MenuRoundedIcon } from "@mui/icons-material";
+import AppBar from "@mui/material/AppBar";
+import MuiToolbar from "@mui/material/Toolbar";
+import Stack from "@mui/material/Stack";
+import Typography from "@mui/material/Typography";
+import { tabsClasses } from "@mui/material/Tabs";
+import MenuRoundedIcon from "@mui/icons-material/MenuRounded";
 import { WorkspaceSideMenuMobile } from "./WorkspaceSideMenuMobile";
 import { MenuButton } from "./MenuButton";
 

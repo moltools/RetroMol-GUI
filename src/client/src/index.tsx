@@ -1,5 +1,5 @@
 import React from "react";
-import * as ReactDOM from "react-dom/client";
+import ReactDOM from "react-dom/client";
 import { StyledEngineProvider } from "@mui/material/styles";
 import type {} from "@mui/material/themeCssVarsAugmentation";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
@@ -7,7 +7,6 @@ import { AnimatePresence, motion } from "framer-motion";
 
 // Import pages
 import Home from "./pages/Home";
-import Example from "./pages/Example";
 import Dashboard from "./pages/Dashboard";
 import NotFound from "./pages/NotFound";
 
@@ -48,7 +47,6 @@ const AnimatedRoutes = () => {
     <AnimatePresence mode="wait">
       <Routes location={location} key={getPageKey(location.pathname)}>
         <Route path="/" element={<Page><Home /></Page>} />
-        <Route path="/example" element={<Page><Example /></Page>} />
         <Route path="/dashboard/*" element={<Page><Dashboard /></Page>} />
         <Route path="/oops" element={<Page><NotFound title="Something went wrong" subtitle="Something catastrophic happened. Please reach out to us on GitHub." /></Page>} />
         <Route path="/notfound" element={<Page><NotFound title="Session not found" subtitle="The session you are looking for does not exist." /></Page>} />

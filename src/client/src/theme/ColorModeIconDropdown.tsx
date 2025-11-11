@@ -1,4 +1,4 @@
-import * as React from "react";
+import React from "react";
 import { Box, IconButton, IconButtonOwnProps, Menu, MenuItem, Tooltip } from "@mui/material";
 import { DarkMode as DarkModeIcon, LightMode as LightModeIcon } from "@mui/icons-material";
 import { useColorScheme } from "@mui/material/styles";

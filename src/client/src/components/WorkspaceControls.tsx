@@ -1,6 +1,6 @@
 import React from "react";
-import { Stack } from "@mui/material";
-import { NotificationsRounded as NotificationsRoundedIcon } from "@mui/icons-material";
+import Stack from "@mui/material/Stack";
+import NotificationsRoundedIcon from "@mui/icons-material/NotificationsRounded";
 import { MenuButton } from "./MenuButton";
 import { useNotifications } from "./NotificationProvider";
 import { UserIconDropdown } from "./UserIconDropdown";

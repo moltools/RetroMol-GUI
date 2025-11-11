@@ -1,5 +1,6 @@
 import React from "react";
-import { Box, Drawer as MuiDrawer, drawerClasses } from "@mui/material";
+import Box from "@mui/material/Box";
+import MuiDrawer, { drawerClasses } from "@mui/material/Drawer";
 import { styled } from "@mui/material/styles";
 import { MenuContent } from "./MenuContent";
 import { BuildVersion } from "./BuildVersion";

@@ -1,4 +1,4 @@
-import * as React from "react";
+import React from "react";
 import { Theme, alpha, Components } from "@mui/material/styles";
 import {
   SvgIconProps,

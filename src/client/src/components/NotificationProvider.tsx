@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from "react";
+import React from "react";
 
 // Define possible notification levels
 export type NotificationLevel = "error" | "warning" | "success" | "info";
@@ -18,18 +18,18 @@ export interface NotificationContextType {
   markAllAsRead: () => void;
 }
 
-const NotificationContext = createContext<NotificationContextType>({
+const NotificationContext = React.createContext<NotificationContextType>({
   notifications: [],
   pushNotification: () => {},
   markAllAsRead: () => {},
 })
 
 export function useNotifications() {
-  return useContext(NotificationContext);
+  return React.useContext(NotificationContext);
 }
 
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notifications, setNotifications] = React.useState<Notification[]>([]);
 
   const pushNotification = (content: string, level: NotificationLevel = "info") => {
     console.log("Pushing notification:", content, level);

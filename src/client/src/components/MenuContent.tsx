@@ -1,6 +1,13 @@
-import * as React from "react";
-import { List, ListItem, ListItemButton, ListItemIcon, ListItemText, Stack } from "@mui/material";
-import { Explore as ExploreIcon, HomeRounded as HomeRoundedIcon, UploadFile as UploadFileIcon } from "@mui/icons-material";
+import React from "react";
+import List from "@mui/material/List";
+import ListItem from "@mui/material/ListItem";
+import ListItemButton from "@mui/material/ListItemButton";
+import ListItemIcon from "@mui/material/ListItemIcon";
+import ListItemText from "@mui/material/ListItemText";
+import Stack from "@mui/material/Stack";
+import ExploreIcon from "@mui/icons-material/Explore";
+import HomeRoundedIcon from "@mui/icons-material/HomeRounded";
+import UploadFileIcon from "@mui/icons-material/UploadFile";
 import { useNavigate, useLocation } from "react-router-dom";
 
 const mainListItems = [

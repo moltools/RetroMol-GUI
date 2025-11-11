@@ -1,5 +1,10 @@
 import React from "react";
-import { Box, Card, CardContent, Link as MuiLink, Typography, useTheme } from "@mui/material";
+import Box from "@mui/material/Box";
+import Card from "@mui/material/Card";
+import CardContent from "@mui/material/CardContent";
+import MuiLink from "@mui/material/Link";
+import Typography from "@mui/material/Typography";
+import { useTheme } from "@mui/material/styles";
 import { Link as RouterLink } from "react-router-dom";
 import { useNotifications } from "./NotificationProvider";
 

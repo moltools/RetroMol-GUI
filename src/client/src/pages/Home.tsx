@@ -1,5 +1,5 @@
-import * as React from "react";
-import { Box, CssBaseline } from "@mui/material";
+import Box from "@mui/material/Box";
+import CssBaseline from "@mui/material/CssBaseline";
 import AppTheme from "../theme/AppTheme";
 import HomeAppBar from "../components/HomeAppBar";
 import Hero from "../components/Hero";

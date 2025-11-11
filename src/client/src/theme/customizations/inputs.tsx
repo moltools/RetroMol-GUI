@@ -1,4 +1,4 @@
-import * as React from "react";
+import React from "react";
 import { alpha, Theme, Components } from "@mui/material/styles";
 import { outlinedInputClasses, svgIconClasses, toggleButtonGroupClasses, toggleButtonClasses } from "@mui/material";
 import {

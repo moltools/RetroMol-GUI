@@ -1,7 +1,8 @@
 import React from "react";
 import { styled } from "@mui/material/styles";
-import { Breadcrumbs, Typography, breadcrumbsClasses } from "@mui/material";
-import { NavigateNextRounded as NavigateNextRoundedIcon } from "@mui/icons-material";
+import Breadcrumbs, { breadcrumbsClasses } from "@mui/material/Breadcrumbs";
+import Typography from "@mui/material/Typography";
+import NavigateNextRoundedIcon from "@mui/icons-material/NavigateNextRounded";
 import { useLocation, Link } from "react-router-dom";
 
 const StyledBreadcrumbs = styled(Breadcrumbs)(({ theme }) => ({

@@ -1,5 +1,4 @@
-import React from "react";
-import { CssBaseline } from "@mui/material";
+import CssBaseline from "@mui/material/CssBaseline";
 import AppTheme from "../theme/AppTheme";
 import { OverlayProvider } from "../components/OverlayProvider";
 import { NotificationProvider } from "../components/NotificationProvider";

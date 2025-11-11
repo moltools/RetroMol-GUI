@@ -1,5 +1,6 @@
-import React, { createContext, useState, useContext, ReactNode } from "react";
-import { Backdrop, CircularProgress } from "@mui/material";
+import React from "react";
+import Backdrop from '@mui/material/Backdrop';
+import CircularProgress from '@mui/material/CircularProgress';
 
 interface OverlayContextProps {
   showOverlay: () => void;
@@ -7,11 +8,11 @@ interface OverlayContextProps {
 }
 
 // Create the context with an undefined initial value
-const OverlayContext = createContext<OverlayContextProps | undefined>(undefined);
+const OverlayContext = React.createContext<OverlayContextProps | undefined>(undefined);
 
 // Custom hook to use the overlay context
 export const useOverlay = (): OverlayContextProps => {
-  const context = useContext(OverlayContext);
+  const context = React.useContext(OverlayContext);
   if (!context) {
     throw new Error("useOverlay must be used within an OverlayProvider");
   }
@@ -19,12 +20,12 @@ export const useOverlay = (): OverlayContextProps => {
 }
 
 interface OverlayProviderProps {
-  children: ReactNode;
+  children: React.ReactNode;
 }
 
 // The provider component wraps the app and renders the overlay
 export const OverlayProvider: React.FC<OverlayProviderProps> = ({ children }) => {
-  const [open, setOpen] = useState<boolean>(false);
+  const [open, setOpen] = React.useState<boolean>(false);
 
   const showOverlay = () => setOpen(true);
   const hideOverlay = () => setOpen(false);

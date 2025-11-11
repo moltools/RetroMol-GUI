@@ -1,5 +1,5 @@
-import * as React from "react";
-import { Stack } from "@mui/material";
+import React from "react";
+import Stack from "@mui/material/Stack";
 import { NavbarBreadcrumbs } from "./NavbarBreadcrumbs";
 import { NotificationDrawer } from "./NotificationDrawer";
 import { WorkspaceControls } from "./WorkspaceControls";

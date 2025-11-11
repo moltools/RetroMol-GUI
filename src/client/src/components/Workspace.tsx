@@ -1,5 +1,6 @@
 import React from "react";
-import { Box, Stack } from "@mui/material";
+import Box from "@mui/material/Box";
+import Stack from "@mui/material/Stack";
 import { alpha } from "@mui/material/styles";
 import { Routes, Route, useNavigate } from "react-router-dom";
 import { useNotifications } from "../components/NotificationProvider";
