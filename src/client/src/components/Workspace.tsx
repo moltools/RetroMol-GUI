@@ -19,36 +19,38 @@ export const Workspace: React.FC = () => {
   const { pushNotification } = useNotifications();
   const navigate = useNavigate();
   const [session, setSession] = React.useState<Session | null>(null);
+  const [loading, setLoading] = React.useState<boolean>(true);
 
   // Retrieve session from the server on component mount
   React.useEffect(() => {
+    let alive = true;
+    setLoading(true);
     getSession()
       .then(sess => setSession(sess))
       .catch(err => {
         console.error("Error loading session:", err);
         navigate("/notfound");
       })
+      .finally(() => { if (alive) setLoading(false); })
+    return () => { alive = false; }
   }, [navigate])
+
+  // Overlay follows loading state
+  React.useEffect(() => {
+    if (loading) showOverlay(); else hideOverlay();
+  }, [loading, showOverlay, hideOverlay])
 
   // Auto-save session whenever session changes
   React.useEffect(() => {
     if (!session) return;
-    
-    saveSession(session)
-      .then(() => {}) // save successful; do nothing
-      .catch(err => {
-        const msg = err instanceof Error ? err.message : String(err);
-        pushNotification(`Failed to save session: ${msg}`, "error");
-      })
-  }, [session])
+    saveSession(session).catch(err => {
+      const msg = err instanceof Error ? err.message : String(err);
+      pushNotification(`Failed to save session: ${msg}`, "error");
+    })
+  }, [session, pushNotification]);
 
-  // Display loading overlay until session is set
-  if (!session) {
-    showOverlay();
-    return null;
-  } else {
-    hideOverlay();
-  }
+  // While loading, render nothing (overlay is shown)
+  if (loading) return null; 
 
   return (
     <Box sx={{ display: "flex"}}>

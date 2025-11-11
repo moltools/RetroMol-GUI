@@ -17,8 +17,6 @@ export const WorkspaceControls: React.FC<WorksspaceControlsProps> = ({ handleDra
   // Check if there"s any new notification
   const hasNewNotifications = notifications.some((n) => n.isNew);
 
-  console.log(sx);
-
   return (
     <Stack direction="row" sx={{ gap: 1, ...sx }}>
       <MenuButton 

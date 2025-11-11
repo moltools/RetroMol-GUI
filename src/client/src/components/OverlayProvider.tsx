@@ -27,8 +27,8 @@ interface OverlayProviderProps {
 export const OverlayProvider: React.FC<OverlayProviderProps> = ({ children }) => {
   const [open, setOpen] = React.useState<boolean>(false);
 
-  const showOverlay = () => setOpen(true);
-  const hideOverlay = () => setOpen(false);
+  const showOverlay = React.useCallback(() => setOpen(true), []);
+  const hideOverlay = React.useCallback(() => setOpen(false), []);
 
   return (
     <OverlayContext.Provider value={{ showOverlay, hideOverlay }}>
