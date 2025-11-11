@@ -5,7 +5,6 @@ set -eu
 
 FILE="/docker-entrypoint-initdb.d/dump.dump"
 
-
 if [ ! -f "$FILE" ]; then
   echo "No dump file found at $FILE"
   exit 1
