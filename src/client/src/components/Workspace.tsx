@@ -9,6 +9,9 @@ import { getSession, saveSession } from "../features/session/api";
 import { WorkspaceNavbar } from "./WorkspaceNavbar";
 import { WorkspaceSideMenu } from "./WorkspaceSideMenu";
 import { WorkspaceHeader } from "./WorkspaceHeader";
+import { WorkspaceDashboard } from "./WorkspaceDashboard";
+import { WorkspaceUpload } from "./WorkspaceUpload";
+import { WorkspaceExplore } from "./WorkspaceExplore";
 
 export const Workspace: React.FC = () => {
   const { showOverlay, hideOverlay } = useOverlay();
@@ -66,9 +69,9 @@ export const Workspace: React.FC = () => {
         >
           <WorkspaceHeader />
           <Routes>
-            {/* <Route index element={<OverviewPanel />} /> */}
-            {/* <Route path="upload" element={<UploadPanel session={session} setSession={setSession} />} /> */}
-            {/* <Route path="explore" element={<ExplorePanel session={session} setSession={setSession} />} /> */}
+            <Route index element={<WorkspaceDashboard />} />
+            <Route path="upload" element={<WorkspaceUpload />} />
+            <Route path="explore" element={<WorkspaceExplore />} />
           </Routes>
         </Stack>
       </Box>
