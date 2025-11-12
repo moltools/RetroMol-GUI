@@ -37,21 +37,40 @@ def dsn_from_env() -> str:
 
 
 QUERIES = {
-    "compound_by_mass": {
+    "binned_coverage": {
         "sql": """
-            SELECT id, inchikey, exact_mass
-            FROM compound
-            WHERE exact_mass BETWEEN %(min_mass)s AND %(max_mass)s
-            AND exact_mass IS NOT NULL
-            ORDER BY {order_col} {order_dir}
-            LIMIT %(limit)s OFFSET %(offset)s
+            SELECT
+                width_bucket(LEAST(coverage, 1 - 1e-12), 0.0, 1.0, 20) AS bin_id,
+                0.05 * (width_bucket(LEAST(coverage, 1 - 1e-12), 0.0, 1.0, 20) - 1) AS bin_start,
+                0.05 *  width_bucket(LEAST(coverage, 1 - 1e-12), 0.0, 1.0, 20)       AS bin_end,
+                COUNT(*) AS count
+            FROM retromol_compound
+            WHERE coverage IS NOT NULL
+            GROUP BY bin_id
+            ORDER BY bin_id;
         """,
-        "allowed_order_cols": {"id", "inchikey", "exact_mass"},
-        "default_order_col": "exact_mass",
-        "default_order_dir": "DESC",
-        "required": {"min_mass": float, "max_mass": float},
+        "allowed_order_cols": {"bin_id", "bin_start", "bin_end", "count"},
+        "default_order_col": "bin_start",
+        "default_order_dir": "ASC",
+        "required": {},
         "optional": {},
     },
+    "fingerprint_source_counts": {
+        "sql": """
+            SELECT cpr.source, COUNT(*) AS count_per_source
+            FROM retrofingerprint AS rfp
+            JOIN retromol_compound AS rcp ON rfp.retromol_compound_id = rcp.id
+            JOIN compound_record AS cpr ON rfp.retromol_compound_id = cpr.compound_id
+            WHERE rcp.coverage >= 0.95
+            GROUP BY cpr.source
+            ORDER BY count_per_source DESC;
+        """,
+        "allowed_order_cols": {"source", "count_per_source"},
+        "default_order_col": "count_per_source",
+        "default_order_dir": "DESC",
+        "required": {},
+        "optional": {},
+    }
 }
 
 
