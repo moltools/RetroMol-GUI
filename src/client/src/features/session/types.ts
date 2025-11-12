@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const SessionSchema = z.object({
   sessionId: z.string(),
-  created: z.number(), // epoch ms 
+  created: z.number().nonnegative(),
 })
 
 export type Session = z.infer<typeof SessionSchema>;

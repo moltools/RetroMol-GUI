@@ -6,11 +6,32 @@ import MuiLink from "@mui/material/Link";
 import Typography from "@mui/material/Typography";
 import { useTheme } from "@mui/material/styles";
 import { Link as RouterLink } from "react-router-dom";
-import { useNotifications } from "./NotificationProvider";
+import { useNotifications } from "../components/NotificationProvider";
+import type { QueryResult } from "../features/query/types";
+import { runQuery } from "../features/query/api";
 
 export const WorkspaceDashboard: React.FC = () => {
     const theme = useTheme();
     const { pushNotification } = useNotifications();
+
+    const [result, setResult] = React.useState<QueryResult | null>(null);
+
+    React.useEffect(() => {
+      let alive = true;
+      (async () => {
+        try {
+          const r = await runQuery({
+            name: "compound_by_mass",
+            params: { min_mass: 100, max_mass: 300 },
+            paging: { limit: 50, offset: 0 },
+            order: { column: "exact_mass", dir: "asc" },
+          });
+          if (alive) setResult(r);
+        } catch (e: any) {
+          pushNotification(e?.message ?? "Query failed", "error");
+        };
+      })();
+    }, [pushNotification]);
 
     return (
       <Box 
