@@ -47,7 +47,7 @@ QUERIES = {
             FROM retromol_compound
             WHERE coverage IS NOT NULL
             GROUP BY bin_id
-            ORDER BY bin_id;
+            ORDER BY {order_col} {order_dir}
         """,
         "allowed_order_cols": {"bin_id", "bin_start", "bin_end", "count"},
         "default_order_col": "bin_start",
@@ -63,14 +63,14 @@ QUERIES = {
             JOIN compound_record AS cpr ON rfp.retromol_compound_id = cpr.compound_id
             WHERE rcp.coverage >= 0.95
             GROUP BY cpr.source
-            ORDER BY count_per_source DESC;
+            ORDER BY {order_col} {order_dir}
         """,
         "allowed_order_cols": {"source", "count_per_source"},
         "default_order_col": "count_per_source",
         "default_order_dir": "DESC",
         "required": {},
         "optional": {},
-    }
+    },
 }
 
 
@@ -149,9 +149,12 @@ def run_query():
 
     # Render final SQL safely for the ORDER BY identifier
     base_sql = qinfo["sql"]
-    rendered = base_sql.format(
-        order_col=sql.Identifier(order_col).as_string(psycopg.connect(dsn_from_env())),
-        order_dir=order_dir,
+    rendered = (
+        base_sql.format(
+            order_col=sql.Identifier(order_col).as_string(psycopg.connect(dsn_from_env())),
+            order_dir=order_dir,
+        ).rstrip().rstrip(";")
+        + f" LIMIT %(limit)s OFFSET %(offset)s"
     )
 
     # Exec (read-only, short timeout, public schema)
