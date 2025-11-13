@@ -1,4 +1,5 @@
 import React from "react";
+import Box from "@mui/material/Box";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
@@ -65,14 +66,25 @@ export const DialogWindow: React.FC<DialogWindowProps> = ({
         <DialogTitle sx={{ pr: disableCloseButton ? 3 : 6 }}>
           {title}
           {!disableCloseButton && (
-            <IconButton
-              aria-label="close"
-              onClick={(e) => onClose(e, "escapeKeyDown")}
-              sx={{ position: "absolute", right: 8, top: 8 }}
-              size="small"
+            <Box
+              onClick={(e) => onClose(e as any, "escapeKeyDown")}
+              sx={{
+                position: "absolute",
+                right: 8,
+                top: 8,
+                cursor: "pointer",
+                lineHeight: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                outline: "none",
+                "&:hover": { outline: "none" },
+                "&:focus": { outline: "none" },
+                "&:focus-visible": { outline: "none" },
+              }}
             >
               <CloseIcon fontSize="small" />
-            </IconButton>
+            </Box>
           )}
         </DialogTitle>
       )}

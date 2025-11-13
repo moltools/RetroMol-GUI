@@ -71,6 +71,21 @@ QUERIES = {
         "required": {},
         "optional": {},
     },
+    "search_compound_by_name": {
+        "sql": """
+            SELECT cpr.name, MIN(cp.smiles) as smiles
+            FROM compound as cp
+            JOIN compound_record as cpr ON cp.id = cpr.compound_id
+            WHERE cpr.name ILIKE %(q)s || '%%'
+            GROUP BY cpr.name
+            ORDER BY {order_col} {order_dir}
+        """,
+        "allowed_order_cols": {"name", "smiles"},
+        "default_order_col": "name",
+        "default_order_dir": "ASC",
+        "required": {"q": str},
+        "optional": {},
+    }
 }
 
 

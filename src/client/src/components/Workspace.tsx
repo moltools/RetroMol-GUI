@@ -51,6 +51,7 @@ export const Workspace: React.FC = () => {
 
   // While loading, render nothing (overlay is shown)
   if (loading) return null; 
+  if (!session) return null; // should not happen, but TS type guard
 
   return (
     <Box sx={{ display: "flex"}}>
@@ -73,8 +74,8 @@ export const Workspace: React.FC = () => {
           <WorkspaceHeader />
           <Routes>
             <Route index element={<WorkspaceDashboard />} />
-            <Route path="upload" element={<WorkspaceUpload />} />
-            <Route path="explore" element={<WorkspaceExplore />} />
+            <Route path="upload" element={<WorkspaceUpload session={session} setSession={setSession} />} />
+            <Route path="explore" element={<WorkspaceExplore session={session} setSession={setSession} />} />
           </Routes>
         </Stack>
       </Box>

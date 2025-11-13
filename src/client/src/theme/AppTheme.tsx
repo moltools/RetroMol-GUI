@@ -5,7 +5,6 @@ import { autoCompleteCustomizations } from "./customizations/autoComplete";
 import { inputsCustomizations } from "./customizations/inputs";
 import { feedbackCustomizations } from "./customizations/feedback";
 import { navigationCustomizations } from "./customizations/navigation";
-import { surfacesCustomizations } from "./customizations/surfaces";
 import { colorSchemes, typography, shadows, shape } from "./themePrimitives";
 
 interface AppThemeProps {
@@ -34,7 +33,6 @@ export default function AppTheme(props: AppThemeProps) {
             ...inputsCustomizations,
             ...feedbackCustomizations,
             ...navigationCustomizations,
-            ...surfacesCustomizations,
             ...themeComponents,
           },
         });
