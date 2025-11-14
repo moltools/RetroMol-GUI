@@ -21,7 +21,56 @@ const MAX_ITEMS = 20;
 
 type WorkspaceUploadProps = {
   session: Session;
-  setSession: (session: Session) => void;
+  // Updated to functional form to avoid stale closures
+  setSession: (updated: (prev: Session) => Session) => void;
+}
+
+type NewCompoundJob = {
+  name: string;
+  smiles: string;
+}
+
+async function parseCompoundFile(file: File): Promise<NewCompoundJob[]> {
+  const text = await file.text();
+
+  // Normalize newlines and split lines
+  const lines = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+  if (lines.length === 0) return [];
+
+  const headerLine = lines[0].trim();
+
+  // Detect delimiter based on file extension
+  let delimiter = ",";
+  if (file.name.endsWith(".tsv") || file.name.endsWith(".txt")) {
+    delimiter = "\t";
+  } else if (file.name.endsWith(".csv")) {
+    delimiter = ",";
+  }
+
+  const headers = headerLine.split(delimiter).map(h => h.trim().toLowerCase());
+  const nameIdx = headers.indexOf("name");
+  const smilesIdx = headers.indexOf("smiles");
+
+  if (nameIdx === -1 || smilesIdx === -1) {
+    throw new Error("File must contain 'name' and 'smiles' columns in the header.");
+  }
+
+  const compounds: NewCompoundJob[] = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (line === "") continue; // skip empty lines
+
+    const cols = line.split(delimiter).map(c => c.trim());
+    const name = (cols[nameIdx] ?? "").trim();
+    const smiles = (cols[smilesIdx] ?? "").trim();
+
+    if (!name || !smiles) continue;
+
+    compounds.push({ name, smiles });
+  }
+
+  return compounds;
 }
 
 export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSession }) => {
@@ -32,20 +81,6 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
   const [openGeneClusters, setOpenGeneClusters] = React.useState(false);
 
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
-  const currentItemCount = session.items?.length ?? 0;
-
-  // Helper to add items while respecting MAX_ITEMS limit
-  const appendItems = (newItems: SessionItem[]): Session => {
-    const existing = session.items || [];
-    const total = existing.length + newItems.length;
-    if (total > MAX_ITEMS) {
-      pushNotification(`Cannot add items. Importing these items would exceed the maximum limit of ${MAX_ITEMS}. Current count: ${existing.length}`, "error");
-      return session;
-    }
-    const updated: Session = { ...session, items: [...existing, ...newItems] };
-    setSession(updated);
-    return updated;
-  }
 
   // Selection helpers
   const toggleSelectItem = (id: string) => {
@@ -58,13 +93,15 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
   }
 
   const handleDeleteItem = (id: string) => {
-    const remaining = session.items.filter(item => item.id !== id);
-    setSession({ ...session, items: remaining });
+    setSession(prev => ({
+      ...prev,
+      items: prev.items.filter(item => item.id !== id),
+    }))
     setSelectedIds(prev => {
       const next = new Set(prev);
       next.delete(id);
       return next;
-    });
+    })
   }
 
   const handleSelectAll = () => {
@@ -79,68 +116,135 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
   const handleDeleteSelected = () => {
     if (selectedIds.size === 0) return;
     const toDelete = new Set(selectedIds);
-    const remaining = session.items.filter(item => !toDelete.has(item.id));
-    setSession({ ...session, items: remaining });
+    
+    setSession(prev => ({
+      ...prev,
+      items: prev.items.filter(item => !toDelete.has(item.id)),
+    }))
     setSelectedIds(new Set());
   }
 
   // Actions and handlers for compounds
-  const handleImportSingleCompound = async ({ name, smiles }: { name: string; smiles: string }) => {
-    const itemId = crypto.randomUUID();
-
-    const item: SessionItem = {
-      id: itemId,
-      kind: "compound",
-      name,
-      smiles,
-      status: "queued",
-      errorMessage: null,
-      updatedAt: Date.now(),
-    };
+  const importCompounds = async (compounds: NewCompoundJob[]) => {
+    if (compounds.length === 0) {
+      pushNotification("No valid compounds to import", "warning");
+      return;
+    }
     
-    // Update local session + triggers auto-save
-    const updatedSession = appendItems([item]);
+    let nextSession: Session | null = null;
+    let newItems: SessionItem[] = [];
 
+    setSession(prev => {
+      const existingCount = prev.items.length;
+      const remainingSlots = MAX_ITEMS - existingCount;
+
+      if (remainingSlots <= 0) {
+        pushNotification(`Workspace is full. Maximum of ${MAX_ITEMS} items allowed.`, "error");
+        nextSession = prev;
+        newItems = [];
+        return prev;
+      }
+
+      const limitedCompounds =
+        compounds.length > remainingSlots
+          ? compounds.slice(0, remainingSlots)
+          : compounds;
+
+      if (limitedCompounds.length < compounds.length) {
+        pushNotification(`Only ${remainingSlots} compounds were imported due to workspace limit of ${MAX_ITEMS} items.`, "warning");
+      }
+
+      // Build items only for actually-imported compounds
+      newItems = limitedCompounds.map(({ name, smiles }) => ({
+        id: crypto.randomUUID(),
+        kind: "compound",
+        name,
+        smiles,
+        status: "queued",
+        errorMessage: null,
+        updatedAt: Date.now(),
+      }))
+
+      const updated: Session = {
+        ...prev,
+        items: [...prev.items, ...newItems],
+      }
+      nextSession = updated;
+      return updated;
+    })
+
+    // If nothing was added, bail out
+    if (!nextSession || newItems.length === 0) {
+      // Should not happen, but guard against it
+      return;
+    }
+
+    // Save session before submitting jobs
     try {
-      // Save session before submitting job
-      await saveSession(updatedSession);
+      await saveSession(nextSession);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       pushNotification(`Failed to save session: ${msg}`, "error");
 
-      // Mark this item as error locally
-      setSession({
-        ...updatedSession,
-        items: updatedSession.items.map((it) =>
-          it.id === itemId
-            ? { ...it, status: "error", errorMessage: `Failed to save session: ${msg}`, updatedAt: Date.now() }
+      const newIds = new Set(newItems.map(ni => ni.id));
+
+      // Mark just new items as error
+      setSession(prev => ({
+        ...prev,
+        items: prev.items.map((it) =>
+          newIds.has(it.id)
+            ? {
+                ...it,
+                status: "error",
+                errorMessage: `Failed to save session: ${msg}`,
+                updatedAt: Date.now(),
+              }
             : it
         ),
-      })
+      }))
       return;
     }
 
-    try {
-      // Submit job to server
-      await submitCompoundJob(session.sessionId, item);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      pushNotification(`Failed to submit compound job: ${msg}`, "error");
+    // Submit jobs for each new compound (sequential for now)
+    for (const item of newItems) {
+      if (item.kind !== "compound") continue;
 
-      // Mark this item as error locally
-      setSession({
-        ...updatedSession,
-        items: updatedSession.items.map((it) =>
-          it.id === itemId
-            ? { ...it, status: "error", errorMessage: `Failed to submit job: ${msg}`, updatedAt: Date.now() }
-            : it
-        ),
-      });
+      try {
+        await submitCompoundJob(session.sessionId, item);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        pushNotification(`Failed to submit job for compound "${item.name}": ${msg}`, "error");
+
+        // Mark this item as error
+        setSession(prev => ({
+          ...prev,
+          items: prev.items.map((it) =>
+            it.id === item.id
+              ? {
+                  ...it,
+                  status: "error",
+                  errorMessage: `Failed to submit job: ${msg}`,
+                  updatedAt: Date.now(),
+                }
+              : it
+          ),
+        }))
+      }
     }
   }
 
-  const handleImportBatchCompounds = (file: File) => {
-    pushNotification("Importing batch compounds not yet implemented", "warning");
+  const handleImportSingleCompound = async ({ name, smiles }: { name: string; smiles: string }) => {
+    await importCompounds([{ name, smiles }]);
+  }
+
+  const handleImportBatchCompounds = async (file: File) => {
+    try {
+      const compounds = await parseCompoundFile(file);
+      await importCompounds(compounds);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      pushNotification(`Failed to parse compound file: ${msg}`, "error");
+    }
   }
 
   // Actions and handlers for gene clusters

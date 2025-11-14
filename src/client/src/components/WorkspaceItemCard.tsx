@@ -5,6 +5,7 @@ import Typography from "@mui/material/Typography";
 import Checkbox from "@mui/material/Checkbox";
 import Chip from "@mui/material/Chip";
 import IconButton from "@mui/material/IconButton";
+import Tooltip from "@mui/material/Tooltip";
 import ScienceIcon from "@mui/icons-material/Science";
 import BiotechIcon from "@mui/icons-material/Biotech";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -57,7 +58,8 @@ export const WorkspaceItemCard: React.FC<WorkspaceItemCardProps> = ({
     return () => { window.clearInterval(id); }
   }, [])
 
-  const showSpinner = item.status === "queued" || item.status === "processing";
+  const isQueued = item.status === "queued";
+  const showSpinner = item.status === "processing";
   const isError = item.status === "error";
   const isDone = item.status === "done";
 
@@ -108,6 +110,15 @@ export const WorkspaceItemCard: React.FC<WorkspaceItemCardProps> = ({
       </Stack>
       
       <Stack direction="row" spacing={1} alignItems="center">
+        {isQueued && (
+          <Chip
+            label="Queued"
+            color="warning"
+            size="small"
+            sx={{ fontSize: "0.7rem", height: 20 }}
+          />
+        )}
+        
         {showSpinner && (<CircularProgress size={16} thickness={4} />)}
 
         {isDone && (
@@ -120,12 +131,18 @@ export const WorkspaceItemCard: React.FC<WorkspaceItemCardProps> = ({
         )}
 
         {isError && (
-          <Chip
-            label="Error"
-            color="error"
-            size="small"
-            sx={{ fontSize: "0.7rem", height: 20 }}
-          />
+          <Tooltip
+            title={item.errorMessage || "An unknown error occurred."}
+            placement="left"
+            arrow
+          >
+            <Chip
+              label="Error"
+              color="error"
+              size="small"
+              sx={{ fontSize: "0.7rem", height: 20 }}
+            />
+          </Tooltip>
         )}
 
         <IconButton

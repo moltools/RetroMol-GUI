@@ -108,6 +108,11 @@ def save_session() -> tuple[dict[str, str], int]:
 
     Client owns: which items exist and their user-editable fields
     Server owns: what state those items are in (status, timestamps, errors)
+
+        - for existing items (same id): update fields IN PLACE, but do NOT override
+          status/errorMessage/updatedAt (these are owned by the job backend)
+        - for new items: accept them as-is
+        - items that are missing in the payload are treated as deleted
     
     :return: A tuple containing a dictionary with the session ID and an HTTP status code.
     """
@@ -127,53 +132,40 @@ def save_session() -> tuple[dict[str, str], int]:
     old_session = store.get(session_id)
     if not old_session:
         return {"error": "Session not found"}, 404
-    
-    # Merge top-level fields
-    old_session["sessionId"] = new_session["sessionId"]
-    old_session["created"] = new_session.get("created", old_session.get("created"))
 
-    # Merge items
-    incoming_items = new_session.get("items", []) or []
-    existing_items = old_session.get("items", []) or []
+    old_items_list = old_session.get("items", []) or []
+    new_items_list = new_session.get("items", []) or []
 
     # Index existing items by id
-    existing_by_id: dict[str, dict] = {}
-    for item in existing_items:
-        item_id = item.get("id")
-        if item_id:
-            existing_by_id[item_id] = item
-
+    old_by_id: dict[str, dict] = {item.get("id"): item for item in old_items_list if item.get("id")}
     merged_items: list[dict] = []
 
-    for inc in incoming_items:
-        item_id = inc.get("id")
+    for new_item in new_items_list:
+        item_id = new_item.get("id")
         if not item_id:
+            # No id? Just accept as-is (or skip, your choice)
+            merged_items.append(new_item)
             continue
 
-        srv = existing_by_id.get(item_id)
+        old_item = old_by_id.get(item_id)
 
-        if srv is None:
-            # Brand new item from the client -> accept it as-is
-            merged_items.append(inc)
-            continue
+        if old_item is None:
+            # Truly new item: accept the client version
+            merged_items.append(new_item)
+        else:
+            # Update existing item IN PLACE, BUT keep status fields from server
+            # If we don't update in place, references held elsewhere may break 
+            # and UI will show stale date/endless 'processing' state for an import
+            for key, value in new_item.items():
+                if key in ("status", "errorMessage", "updatedAt"):
+                    # Do not overwrite job-owned fields
+                    continue
+                old_item[key] = value
 
-        # Start from server version so we keep status/updatedAt/errorMessage
-        merged = dict(srv)
+            merged_items.append(old_item)
 
-        # Client-owned fields
-        merged["kind"] = inc.get("kind", merged.get("kind"))
-
-        if merged["kind"] == "compound":
-            merged["name"] = inc.get("name", merged.get("name"))
-            merged["smiles"] = inc.get("smiles", merged.get("smiles"))
-        elif merged["kind"] == "gene_cluster":
-            merged["fileName"] = inc.get("fileName", merged.get("fileName"))
-            merged["fileContent"] = inc.get("fileContent", merged.get("fileContent"))
-
-        # Server-owned fields (status, updatedAt, errorMessage) are preserved
-        # even if the client sent different values, we ignore them
-
-        merged_items.append(merged)
+    # Items omitted by client are considered deleted: we do NOT re-add leftovers
+    # from old_by_id here.
 
     old_session["items"] = merged_items
     store[session_id] = old_session

@@ -25,17 +25,17 @@ export const Workspace: React.FC = () => {
   const lastUpdatedSourceRef = React.useRef<"local" | "remote" | null>(null);
 
   const setSessionLocal = React.useCallback(
-    (value: React.SetStateAction<Session | null>) => {
+    (updater: (prev: Session) => Session) => {
       lastUpdatedSourceRef.current = "local";
-      setSession(value);
+      setSession((prev) => (prev ? updater(prev) : prev));
     },
     []
   );
 
   const setSessionRemote = React.useCallback(
-    (value: React.SetStateAction<Session | null>) => {
+    (next: Session) => {
       lastUpdatedSourceRef.current = "remote";
-      setSession(value);
+      setSession(next);
     },
     []
   );
@@ -79,7 +79,7 @@ export const Workspace: React.FC = () => {
       alive = false;
       window.clearInterval(intervalId);
     }
-  }, [session?.sessionId, refreshSession, setSession, pushNotification]);
+  }, [session?.sessionId, setSessionRemote, pushNotification]);
 
   // Overlay follows loading state
   React.useEffect(() => {
