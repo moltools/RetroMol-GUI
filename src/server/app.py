@@ -8,6 +8,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from flask import Flask, jsonify
 
+from routes.helpers import SESSIONS_KEY
 from routes.session import (
     blp_create_session,
     blp_delete_session,
@@ -15,11 +16,15 @@ from routes.session import (
     blp_save_session,
 )
 from routes.query import dsn_from_env, blp as query_blp
+from routes.jobs import (
+    blp_submit_compound,
+    blp_submit_gene_cluster,
+)
 
 
 # Initialize the Flask app
 app = Flask(__name__)
-sessions_key = "SESSIONS"
+sessions_key = SESSIONS_KEY
 app.config[sessions_key] = dict()
 
 
@@ -157,3 +162,5 @@ app.register_blueprint(blp_delete_session)
 app.register_blueprint(blp_get_session)
 app.register_blueprint(blp_save_session)
 app.register_blueprint(query_blp)
+app.register_blueprint(blp_submit_compound)
+app.register_blueprint(blp_submit_gene_cluster)

@@ -6,7 +6,7 @@ import { Routes, Route, useNavigate } from "react-router-dom";
 import { useNotifications } from "../components/NotificationProvider";
 import { useOverlay } from "../components/OverlayProvider";
 import { Session } from "../features/session/types";
-import { getSession, saveSession } from "../features/session/api";
+import { getSession, refreshSession, saveSession } from "../features/session/api";
 import { WorkspaceNavbar } from "./WorkspaceNavbar";
 import { WorkspaceSideMenu } from "./WorkspaceSideMenu";
 import { WorkspaceHeader } from "./WorkspaceHeader";
@@ -18,15 +18,37 @@ export const Workspace: React.FC = () => {
   const { showOverlay, hideOverlay } = useOverlay();
   const { pushNotification } = useNotifications();
   const navigate = useNavigate();
-  const [session, setSession] = React.useState<Session | null>(null);
   const [loading, setLoading] = React.useState<boolean>(true);
+  const [session, setSession] = React.useState<Session | null>(null);
+
+  // Track source of last update to session; prevents race conditions
+  const lastUpdatedSourceRef = React.useRef<"local" | "remote" | null>(null);
+
+  const setSessionLocal = React.useCallback(
+    (value: React.SetStateAction<Session | null>) => {
+      lastUpdatedSourceRef.current = "local";
+      setSession(value);
+    },
+    []
+  );
+
+  const setSessionRemote = React.useCallback(
+    (value: React.SetStateAction<Session | null>) => {
+      lastUpdatedSourceRef.current = "remote";
+      setSession(value);
+    },
+    []
+  );
 
   // Retrieve session from the server on component mount
   React.useEffect(() => {
     let alive = true;
     setLoading(true);
     getSession()
-      .then(sess => setSession(sess))
+      .then(sess => {
+        if (!alive) return;
+        setSessionRemote(sess);
+      })
       .catch(err => {
         console.error("Error loading session:", err);
         navigate("/notfound");
@@ -34,6 +56,30 @@ export const Workspace: React.FC = () => {
       .finally(() => { if (alive) setLoading(false); })
     return () => { alive = false; }
   }, [navigate])
+
+  // Periodically refresh session data
+  React.useEffect(() => {
+    if (!session) return;
+
+    let alive = true;
+    const intervalMs = 5000; // 5 seconds
+
+    const intervalId = window.setInterval(() => {
+      refreshSession(session.sessionId)
+        .then((fresh) => {
+          if (!alive) return;
+          setSessionRemote(fresh);
+        })
+        .catch((err) => {
+          pushNotification(`Failed to refresh session: ${err instanceof Error ? err.message : String(err)}`, "error");
+        })
+    }, intervalMs);
+
+    return () => {
+      alive = false;
+      window.clearInterval(intervalId);
+    }
+  }, [session?.sessionId, refreshSession, setSession, pushNotification]);
 
   // Overlay follows loading state
   React.useEffect(() => {
@@ -43,6 +89,11 @@ export const Workspace: React.FC = () => {
   // Auto-save session whenever session changes
   React.useEffect(() => {
     if (!session) return;
+    if (lastUpdatedSourceRef.current !== "local") return; // only auto-save if local changes
+
+    // Reset source so we don't double-save
+    lastUpdatedSourceRef.current = null;
+
     saveSession(session).catch(err => {
       const msg = err instanceof Error ? err.message : String(err);
       pushNotification(`Failed to save session: ${msg}`, "error");
@@ -74,8 +125,8 @@ export const Workspace: React.FC = () => {
           <WorkspaceHeader />
           <Routes>
             <Route index element={<WorkspaceDashboard />} />
-            <Route path="upload" element={<WorkspaceUpload session={session} setSession={setSession} />} />
-            <Route path="explore" element={<WorkspaceExplore session={session} setSession={setSession} />} />
+            <Route path="upload" element={<WorkspaceUpload session={session} setSession={setSessionLocal} />} />
+            <Route path="explore" element={<WorkspaceExplore session={session} setSession={setSessionLocal} />} />
           </Routes>
         </Stack>
       </Box>

@@ -16,6 +16,10 @@ export async function getSession(sessionIdArg?: string): Promise<Session> {
   return data.session;
 }
 
+export async function refreshSession(sessionId: string): Promise<Session> {
+  return getSession(sessionId);
+}
+
 export async function saveSession(session: Session): Promise<void> {
   // Runtime validate before sending (especially useful because session is user-mutated in UI)
   SessionSchema.parse(session);

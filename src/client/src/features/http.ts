@@ -2,11 +2,11 @@ import { z } from "zod";
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
-export async function postJson<T>(
+export async function postJson<S extends z.ZodTypeAny>(
   url: string,
   body: unknown,
-  schema: z.ZodSchema<T>
-): Promise<T> {
+  schema: S
+): Promise<z.output<S>> {
   const resp = await fetch(url, {
     method: "POST",
     headers: JSON_HEADERS,
@@ -34,5 +34,6 @@ export async function postJson<T>(
     const first = parsed.error.issues[0];
     throw new Error(`${url} response invalid: ${first.path.join(".")}: ${first.message}`);
   }
+
   return parsed.data;
 }

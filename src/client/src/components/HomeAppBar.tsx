@@ -56,8 +56,8 @@ function RetrieveSession() {
       await getSession(sessionId);
       document.cookie = `sessionId=${sessionId}; path=/; secure; samesite=strict;`;
       navigate("/dashboard");
-    } catch (error) {
-      console.error("error retrieving session:", error);
+    } catch (err) {
+      console.error("error retrieving session:", err);
       navigate("/notfound");
     }
   }
@@ -135,8 +135,8 @@ export default function HomeAppBar() {
       const sessionId = await createSession();
       createCookie("sessionId", sessionId);
       navigate("/dashboard");
-    } catch (error) {
-      console.error("Error creating session:", error);
+    } catch (err) {
+      console.error("Error creating session:", err);
       navigate("/oops");
     }
   }

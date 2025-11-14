@@ -1,6 +1,5 @@
 import React, { useEffect } from "react";
 import Box from "@mui/material/Box";
-import Chip from "@mui/material/Chip";
 import MuiDrawer, { drawerClasses } from "@mui/material/Drawer";
 import ListItem from "@mui/material/ListItem";
 import ListItemText from "@mui/material/ListItemText";
@@ -98,21 +97,14 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({ open, ha
                 }}
               >
                 <ListItemText
-                  primary={
+                  primary={ new Date(notification.timestamp).toLocaleString() }
+                  secondary={
                     <Typography
                       variant="subtitle2"
                       sx={{ fontWeight: notification.isNew ? 600 : 400 }}
                     >
                       {notification.content}
                     </Typography>
-                  }
-                  secondary={
-                    notification.isNew ? (
-                      // show a chip with the level color for new notifications.
-                      <Chip label="New" size="small" color={notification.level} />
-                    ) : (
-                      new Date(notification.timestamp).toLocaleString()
-                    )
                   }
                   secondaryTypographyProps={{ component: "div" }}  // render wrapper as div instead of p
                 />

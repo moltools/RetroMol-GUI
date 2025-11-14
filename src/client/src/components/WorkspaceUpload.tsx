@@ -6,6 +6,7 @@ import CardContent from '@mui/material/CardContent';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import MuiLink from "@mui/material/Link";
+import NotificationsRoundedIcon from '@mui/icons-material/NotificationsRounded';
 import { useTheme } from "@mui/material/styles";
 import { useNotifications } from "../components/NotificationProvider";
 import { Link as RouterLink } from "react-router-dom";
@@ -13,8 +14,10 @@ import { DialogImportCompound } from "./DialogImportCompound";
 import { DialogImportGeneCluster } from "./DialogImportGeneCluster";
 import { WorkspaceItemCard } from "./WorkspaceItemCard";
 import { Session, SessionItem } from "../features/session/types";
+import { saveSession } from "../features/session/api";
+import { submitCompoundJob } from "../features/jobs/api";
 
-const MAX_ITEMS = 100;
+const MAX_ITEMS = 20;
 
 type WorkspaceUploadProps = {
   session: Session;
@@ -32,15 +35,16 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
   const currentItemCount = session.items?.length ?? 0;
 
   // Helper to add items while respecting MAX_ITEMS limit
-  const appendItems = (newItems: SessionItem[]) => {
+  const appendItems = (newItems: SessionItem[]): Session => {
     const existing = session.items || [];
     const total = existing.length + newItems.length;
     if (total > MAX_ITEMS) {
       pushNotification(`Cannot add items. Importing these items would exceed the maximum limit of ${MAX_ITEMS}. Current count: ${existing.length}`, "error");
-      return;
+      return session;
     }
-
-    setSession({ ...session, items: [...existing, ...newItems] });
+    const updated: Session = { ...session, items: [...existing, ...newItems] };
+    setSession(updated);
+    return updated;
   }
 
   // Selection helpers
@@ -81,14 +85,58 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
   }
 
   // Actions and handlers for compounds
-  const handleImportSingleCompound = ({ name, smiles }: { name: string; smiles: string }) => {
+  const handleImportSingleCompound = async ({ name, smiles }: { name: string; smiles: string }) => {
+    const itemId = crypto.randomUUID();
+
     const item: SessionItem = {
-      id: crypto.randomUUID(),
+      id: itemId,
       kind: "compound",
       name,
       smiles,
+      status: "queued",
+      errorMessage: null,
+      updatedAt: Date.now(),
     };
-    appendItems([item]);
+    
+    // Update local session + triggers auto-save
+    const updatedSession = appendItems([item]);
+
+    try {
+      // Save session before submitting job
+      await saveSession(updatedSession);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      pushNotification(`Failed to save session: ${msg}`, "error");
+
+      // Mark this item as error locally
+      setSession({
+        ...updatedSession,
+        items: updatedSession.items.map((it) =>
+          it.id === itemId
+            ? { ...it, status: "error", errorMessage: `Failed to save session: ${msg}`, updatedAt: Date.now() }
+            : it
+        ),
+      })
+      return;
+    }
+
+    try {
+      // Submit job to server
+      await submitCompoundJob(session.sessionId, item);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      pushNotification(`Failed to submit compound job: ${msg}`, "error");
+
+      // Mark this item as error locally
+      setSession({
+        ...updatedSession,
+        items: updatedSession.items.map((it) =>
+          it.id === itemId
+            ? { ...it, status: "error", errorMessage: `Failed to submit job: ${msg}`, updatedAt: Date.now() }
+            : it
+        ),
+      });
+    }
   }
 
   const handleImportBatchCompounds = (file: File) => {
@@ -98,14 +146,7 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
   // Actions and handlers for gene clusters
   const handleImportGeneClusters = (files: File[]) => {
     if (!files.length) return;
-
-    const newItems: SessionItem[] = files.map((file) => ({
-      id: crypto.randomUUID(),
-      kind: "gene_cluster",
-      fileName: file.name,
-    }));
-
-    appendItems(newItems);
+    pushNotification("Importing gene clusters not yet implemented", "warning");
   }
 
   // Selection states
@@ -146,7 +187,7 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
             >
               Explore tab
             </MuiLink>
-            . A maximum of <b>100 items</b> can be imported into the workspace.
+            . A maximum of <b>{MAX_ITEMS} items</b> can be imported into the workspace. Keep an eye on <NotificationsRoundedIcon fontSize={'small'} sx={{ verticalAlign: 'middle' }} /> for updates on your queries.
           </Typography>
 
           <Stack direction="row" spacing={2} sx={{ mt: 2 }}>

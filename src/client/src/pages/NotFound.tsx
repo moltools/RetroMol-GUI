@@ -33,8 +33,8 @@ const Hero = ({ title, subtitle }: { title?: string; subtitle?: string }) => {
         }
         const data = await response.json();
         setUptime(data.uptime);
-      } catch (error) {
-        console.error("error fetching uptime:", error);
+      } catch (err) {
+        console.error("error fetching uptime:", err);
       }
     };
     fetchUptime();

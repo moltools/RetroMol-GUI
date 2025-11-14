@@ -87,8 +87,8 @@ export const DialogImportCompound: React.FC<DialogImportCompoundProps> = ({
 
         const rows = (res.rows || []) as CompoundOption[];
         setOptions(rows);
-      } catch (error) {
-        pushNotification("Error searching compounds: " + (error as Error).message, "error");
+      } catch (err) {
+        pushNotification("Error searching compounds: " + (err as Error).message, "error");
         setOptions([]);
       } finally {
         setLoading(false);

@@ -2,6 +2,9 @@ import { z } from "zod";
 
 export const BaseItemSchema = z.object({
   id: z.string(),
+  status: z.enum(["queued", "processing", "done", "error"]).default("queued"),
+  errorMessage: z.string().nullable().optional(),
+  updatedAt: z.number().nonnegative().default(() => Date.now()),
 })
 
 export const CompoundItemSchema = BaseItemSchema.extend({
@@ -13,6 +16,7 @@ export const CompoundItemSchema = BaseItemSchema.extend({
 export const GeneClusterSchema = BaseItemSchema.extend({
   kind: z.literal("gene_cluster"),
   fileName: z.string(),
+  fileContent: z.string(),
 })
 
 export const SessionItemSchema = z.discriminatedUnion("kind", [
@@ -20,7 +24,9 @@ export const SessionItemSchema = z.discriminatedUnion("kind", [
   GeneClusterSchema,
 ])
 
-export type SessionItem = z.infer<typeof SessionItemSchema>;
+export type CompoundItem = z.output<typeof CompoundItemSchema>;
+export type GeneClusterItem = z.output<typeof GeneClusterSchema>;
+export type SessionItem = z.output<typeof SessionItemSchema>;
 
 export const SessionSchema = z.object({
   sessionId: z.string(),
@@ -28,7 +34,7 @@ export const SessionSchema = z.object({
   items: z.array(SessionItemSchema).default([]),
 })
 
-export type Session = z.infer<typeof SessionSchema>;
+export type Session = z.output<typeof SessionSchema>;
 
 // Simple response wrappers
 export const CreateSessionRespSchema = z.object({ sessionId: z.string() });
