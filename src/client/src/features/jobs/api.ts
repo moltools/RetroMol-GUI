@@ -1,5 +1,5 @@
 import { postJson } from "../http";
-import type { CompoundItem } from "../session/types";
+import type { CompoundItem, GeneClusterItem } from "../session/types";
 import { z } from "zod";
 
 const SubmitJobRespSchema = z.object({
@@ -10,7 +10,7 @@ const SubmitJobRespSchema = z.object({
 
 export async function submitCompoundJob(
   sessionId: string,
-  item: CompoundItem
+  item: CompoundItem,
 ): Promise<void> {
   await postJson(
     "/api/submit_compound",
@@ -19,6 +19,22 @@ export async function submitCompoundJob(
       itemId: item.id,
       name: item.name,
       smiles: item.smiles,
+    },
+    SubmitJobRespSchema
+  )
+}
+
+export async function submitGeneClusterJob(
+  sessionId: string,
+  item: GeneClusterItem,
+): Promise<void> {
+  await postJson(
+    "/api/submit_gene_cluster",
+    {
+      sessionId,
+      itemId: item.id,
+      fileName: item.fileName,
+      fileContent: item.fileContent,
     },
     SubmitJobRespSchema
   )

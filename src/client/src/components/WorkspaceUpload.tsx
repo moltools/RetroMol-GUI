@@ -15,9 +15,11 @@ import { DialogImportGeneCluster } from "./DialogImportGeneCluster";
 import { WorkspaceItemCard } from "./WorkspaceItemCard";
 import { Session, SessionItem } from "../features/session/types";
 import { saveSession } from "../features/session/api";
-import { submitCompoundJob } from "../features/jobs/api";
+import { submitCompoundJob, submitGeneClusterJob } from "../features/jobs/api";
 
 const MAX_ITEMS = 20;
+const MAX_FILE_SIZE_MB = 2;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
 type WorkspaceUploadProps = {
   session: Session;
@@ -238,6 +240,12 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
   }
 
   const handleImportBatchCompounds = async (file: File) => {
+    // Check file size before reading
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      pushNotification(`The file "${file.name}" exceeds the maximum size of ${MAX_FILE_SIZE_MB} MB and was not imported.`, "error");
+      return;
+    }
+
     try {
       const compounds = await parseCompoundFile(file);
       await importCompounds(compounds);
@@ -248,9 +256,139 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
   }
 
   // Actions and handlers for gene clusters
-  const handleImportGeneClusters = (files: File[]) => {
+  const handleImportGeneClusters = async (files: File[]) => {
     if (!files.length) return;
-    pushNotification("Importing gene clusters not yet implemented", "warning");
+
+    // Check file sizes before reading
+    const oversized = files.filter(f => f.size > MAX_FILE_SIZE_BYTES);
+    if (oversized.length > 0) {
+      pushNotification(`The following files exceed the maximum size of ${MAX_FILE_SIZE_MB} MB and were not imported: ${oversized.map(f => f.name).join(", ")}`, "error");
+      
+      // Keep only files within size limit
+      files = files.filter(f => f.size <= MAX_FILE_SIZE_BYTES);
+    }
+
+    // Check if any files remain after filtering on file size
+    if (files.length === 0) {
+      pushNotification("No gene cluster files to import after size check.", "warning");
+      return;
+    }
+    
+    // Read all files into memory (name + content)
+    let payloads: { fileName: string; fileContent: string }[] = [];
+    try {
+      payloads = await Promise.all(
+        files.map(async (file) => ({
+          fileName: file.name,
+          fileContent: await file.text(),
+        }))
+      )
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      pushNotification(`Failed to read gene cluster files: ${msg}`, "error");
+      return;
+    }
+
+    let nextSession: Session | null = null;
+    let newItems: SessionItem[] = [];
+
+    // Add items to session with MAX_ITEMS guard
+    setSession((prev) => {
+      const existingCount = prev.items.length;
+      const remainingSlots = MAX_ITEMS - existingCount;
+
+      if (remainingSlots <= 0) {
+        pushNotification(`Workspace is full. Maximum of ${MAX_ITEMS} items allowed.`, "error");
+        nextSession = prev;
+        newItems = [];
+        return prev;
+      }
+
+      const limitedPayloads =
+        payloads.length > remainingSlots
+          ? payloads.slice(0, remainingSlots)
+          : payloads;
+      
+      if (limitedPayloads.length < payloads.length) {
+        pushNotification(`Only ${remainingSlots} gene clusters were imported due to workspace limit of ${MAX_ITEMS} items.`, "warning");
+      }
+
+      newItems = limitedPayloads.map(({ fileName, fileContent }) => ({
+        id: crypto.randomUUID(),
+        kind: "gene_cluster",
+        fileName,
+        fileContent,
+        status: "queued",
+        errorMessage: null,
+        updatedAt: Date.now(),
+      }))
+      
+      const updated: Session = {
+        ...prev,
+        items: [...prev.items, ...newItems],
+      }
+
+      nextSession = updated;
+      return updated;
+    })
+
+    // Nothing added? bail
+    if (!nextSession || newItems.length === 0) {
+      return;
+    }
+
+    // Save session before submitting jobs
+    try {
+      await saveSession(nextSession);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      pushNotification(`Failed to save session: ${msg}`, "error");
+
+      const newIds = new Set(newItems.map(ni => ni.id));
+
+      // Mark just new items as error
+      setSession(prev => ({
+        ...prev,
+        items: prev.items.map((it) =>
+          newIds.has(it.id)
+            ? {
+                ...it,
+                status: "error",
+                errorMessage: `Failed to save session: ${msg}`,
+                updatedAt: Date.now(),
+              }
+            : it
+        ),
+      }))
+      return;
+    }
+
+    // Submit jobs for each new gene cluster (sequential for now)
+    for (const item of newItems) {
+      if (item.kind !== "gene_cluster") continue;
+
+      try {
+        await submitGeneClusterJob(session.sessionId, item);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        pushNotification(`Failed to submit job for gene cluster "${item.fileName}": ${msg}`, "error");
+
+        // Mark this item as error
+        setSession(prev => ({
+          ...prev,
+          items: prev.items.map((it) =>
+            it.id === item.id
+              ? {
+                  ...it,
+                  status: "error",
+                  errorMessage: `Failed to submit job: ${msg}`,
+                  updatedAt: Date.now(),
+                }
+              : it
+          ),
+        }))
+      }
+    }
   }
 
   // Selection states

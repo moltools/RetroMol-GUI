@@ -121,3 +121,68 @@ def submit_compound():
         "status": "done",
         "elapsed_ms": elapsed,
     }), 200
+
+
+@blp_submit_gene_cluster.post("/api/submit_gene_cluster")
+def submit_gene_cluster():
+    """
+    Endpoint to submit a gene cluster for processing.
+
+    Expected JSON body:
+      - sessionId: str
+      - itemId: str
+      - fileName: str
+      - fileContent: str
+
+    :return: JSON response
+    """
+    payload = request.get_json(force=True) or {}
+
+    session_id = payload.get("sessionId")
+    item_id = payload.get("itemId")
+    file_name = payload.get("fileName")
+    file_content = payload.get("fileContent")
+
+    if not session_id or not item_id:
+        return jsonify({"error": "Missing sessionId or itemId"}), 400
+    
+    sess = _find_session(session_id)
+    if sess is None:
+        return jsonify({"error": "Session not found"}), 404
+    
+    item = _find_item(sess, item_id)
+    if item is None:
+        return jsonify({"error": "Item not found"}), 404
+    
+    if item.get("kind") != "gene_cluster":
+        return jsonify({"error": "Item is not a gene cluster"}), 400
+
+    t0 = time.time()
+
+    # TODO: update item details; include more processing in future
+    item["fileName"] = file_name or item.get("fileName")
+    item["fileContent"] = file_content or item.get("fileContent")
+
+    # Mark as processing before doing any work
+    _set_item_status(item, "processing")
+    
+    try:
+        # TODO: add real work here
+        time.sleep(2)
+        _set_item_status(item, "done")
+    except Exception as e:
+        _set_item_status(item, "error", error_message=str(e))
+        elapsed = int((time.time() - t0) * 1000)
+        return jsonify({
+            "ok": False,
+            "status": "error",
+            "elapsed_ms": elapsed,
+            "error": str(e),
+        }), 500
+    
+    elapsed = int((time.time() - t0) * 1000)
+    return jsonify({
+        "ok": True,
+        "status": "done",
+        "elapsed_ms": elapsed,
+    }), 200
