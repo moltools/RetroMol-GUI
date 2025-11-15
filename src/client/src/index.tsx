@@ -48,6 +48,7 @@ const AnimatedRoutes = () => {
       <Routes location={location} key={getPageKey(location.pathname)}>
         <Route path="/" element={<Page><Home /></Page>} />
         <Route path="/dashboard/*" element={<Page><Dashboard /></Page>} />
+        <Route path="/maxsessions" element={<Page><NotFound title="Maximum sessions reached" subtitle="The maximum number of active sessions has been reached. Please try again later." /></Page>} />
         <Route path="/oops" element={<Page><NotFound title="Something went wrong" subtitle="Something catastrophic happened. Please reach out to us on GitHub." /></Page>} />
         <Route path="/notfound" element={<Page><NotFound title="Session not found" subtitle="The session you are looking for does not exist." /></Page>} />
         <Route path="/*" element={<Page><NotFound /></Page>} />

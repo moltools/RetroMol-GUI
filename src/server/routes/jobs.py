@@ -1,8 +1,10 @@
 """Module for defining job endpoints."""
 
+import hashlib
 import time
+from random import random
 
-from flask import Blueprint, current_app, request, jsonify
+from flask import Blueprint, request, jsonify
 
 from routes.helpers import _get_session_store
 
@@ -58,7 +60,19 @@ def _set_item_status(item: dict, status: str, error_message: str | None = None) 
             item["errorMessage"] = None
 
 
-@blp_submit_compound.post("/api/submit_compound")
+def _compute_fingerprint_512() -> str:
+    """
+    Dummy function to compute a 512-bit fingerprint as a hex string (128 chars).
+
+    :return: a dummy fingerprint string
+    """
+    random_string = str(time.time())
+    h = hashlib.sha512(random_string.encode("utf-8")).hexdigest()
+    assert len(h) == 128, "Fingerprint length mismatch"
+    return h
+
+
+@blp_submit_compound.post("/api/submitCompound")
 def submit_compound():
     """
     Endpoint to submit a compound for processing.
@@ -102,8 +116,12 @@ def submit_compound():
     _set_item_status(item, "processing")
     
     try:
-        # TODO: add real work here
-        time.sleep(2)
+        # Calculate fingerprint
+        fp_hex = _compute_fingerprint_512()
+        item["fingerprint512"] = fp_hex
+        item["coverage"] = round(random(), 2)  # dummy coverage value between 0 and 1
+
+        # Finished successfully
         _set_item_status(item, "done")
     except Exception as e:
         _set_item_status(item, "error", error_message=str(e))
@@ -123,7 +141,7 @@ def submit_compound():
     }), 200
 
 
-@blp_submit_gene_cluster.post("/api/submit_gene_cluster")
+@blp_submit_gene_cluster.post("/api/submitGeneCluster")
 def submit_gene_cluster():
     """
     Endpoint to submit a gene cluster for processing.
@@ -131,7 +149,7 @@ def submit_gene_cluster():
     Expected JSON body:
       - sessionId: str
       - itemId: str
-      - fileName: str
+      - name: str
       - fileContent: str
 
     :return: JSON response
@@ -140,7 +158,7 @@ def submit_gene_cluster():
 
     session_id = payload.get("sessionId")
     item_id = payload.get("itemId")
-    file_name = payload.get("fileName")
+    name = payload.get("name")
     file_content = payload.get("fileContent")
 
     if not session_id or not item_id:
@@ -160,15 +178,18 @@ def submit_gene_cluster():
     t0 = time.time()
 
     # TODO: update item details; include more processing in future
-    item["fileName"] = file_name or item.get("fileName")
+    item["name"] = name or item.get("name")
     item["fileContent"] = file_content or item.get("fileContent")
 
     # Mark as processing before doing any work
     _set_item_status(item, "processing")
     
     try:
-        # TODO: add real work here
-        time.sleep(2)
+        # Calculate fingerprint
+        fp_hex = _compute_fingerprint_512()
+        item["fingerprint512"] = fp_hex
+        
+        # Finished successfully
         _set_item_status(item, "done")
     except Exception as e:
         _set_item_status(item, "error", error_message=str(e))

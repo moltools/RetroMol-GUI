@@ -136,8 +136,12 @@ export default function HomeAppBar() {
       createCookie("sessionId", sessionId);
       navigate("/dashboard");
     } catch (err) {
-      console.error("Error creating session:", err);
-      navigate("/oops");
+      const status = (err as any)?.status;
+      if (status === 503) {
+        navigate("/maxsessions");
+      } else {
+        navigate("/oops");
+      }
     }
   }
 

@@ -84,6 +84,22 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
 
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
 
+  // Renaming helper
+  const handleRenameItem = (id: string, newName: string) => {
+    setSession((prev) => ({
+      ...prev,
+      items: prev.items.map((item) => 
+        item.id === id
+          ? {
+              ...item,
+              name: newName,
+              updatedAt: Date.now(),
+            }
+          : item
+      ),
+    }))
+  }
+
   // Selection helpers
   const toggleSelectItem = (id: string) => {
     setSelectedIds(prev => {
@@ -275,11 +291,11 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
     }
     
     // Read all files into memory (name + content)
-    let payloads: { fileName: string; fileContent: string }[] = [];
+    let payloads: { name: string; fileContent: string }[] = [];
     try {
       payloads = await Promise.all(
         files.map(async (file) => ({
-          fileName: file.name,
+          name: file.name,
           fileContent: await file.text(),
         }))
       )
@@ -313,10 +329,10 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
         pushNotification(`Only ${remainingSlots} gene clusters were imported due to workspace limit of ${MAX_ITEMS} items.`, "warning");
       }
 
-      newItems = limitedPayloads.map(({ fileName, fileContent }) => ({
+      newItems = limitedPayloads.map(({ name, fileContent }) => ({
         id: crypto.randomUUID(),
         kind: "gene_cluster",
-        fileName,
+        name,
         fileContent,
         status: "queued",
         errorMessage: null,
@@ -371,7 +387,7 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
         await submitGeneClusterJob(session.sessionId, item);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        pushNotification(`Failed to submit job for gene cluster "${item.fileName}": ${msg}`, "error");
+        pushNotification(`Failed to submit job for gene cluster "${item.name}": ${msg}`, "error");
 
         // Mark this item as error
         setSession(prev => ({
@@ -505,6 +521,7 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
                   selected={selectedIds.has(item.id)}
                   onToggleSelect={toggleSelectItem}
                   onDelete={handleDeleteItem}
+                  onRename={handleRenameItem}
                 />
               ))}
             </Stack>

@@ -13,7 +13,7 @@ export async function submitCompoundJob(
   item: CompoundItem,
 ): Promise<void> {
   await postJson(
-    "/api/submit_compound",
+    "/api/submitCompound",
     {
       sessionId,
       itemId: item.id,
@@ -29,11 +29,11 @@ export async function submitGeneClusterJob(
   item: GeneClusterItem,
 ): Promise<void> {
   await postJson(
-    "/api/submit_gene_cluster",
+    "/api/submitGeneCluster",
     {
       sessionId,
       itemId: item.id,
-      fileName: item.fileName,
+      name: item.name,
       fileContent: item.fileContent,
     },
     SubmitJobRespSchema

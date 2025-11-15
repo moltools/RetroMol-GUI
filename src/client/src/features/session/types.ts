@@ -5,17 +5,21 @@ export const BaseItemSchema = z.object({
   status: z.enum(["queued", "processing", "done", "error"]).default("queued"),
   errorMessage: z.string().nullable().optional(),
   updatedAt: z.number().nonnegative().default(() => Date.now()),
+  // All items have a display name
+  name: z.string(),
+  // 512-bit fingerprint represented as a 128-character hex string
+  fingerprint512: z.string().length(128).nullable().optional(),
 })
 
 export const CompoundItemSchema = BaseItemSchema.extend({
   kind: z.literal("compound"),
-  name: z.string(),
   smiles: z.string(),
+  // Coverage is only for compounds; server-owned, so nullable/optional
+  coverage: z.number().min(0).max(1).nullable().optional(),
 })
 
 export const GeneClusterSchema = BaseItemSchema.extend({
   kind: z.literal("gene_cluster"),
-  fileName: z.string(),
   fileContent: z.string(),
 })
 

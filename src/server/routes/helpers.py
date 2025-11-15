@@ -2,8 +2,7 @@
 
 from flask import current_app
 
-
-SESSIONS_KEY = "SESSIONS"
+from routes.config import SESSIONS_KEY
 
 
 def _get_session_store() -> dict:

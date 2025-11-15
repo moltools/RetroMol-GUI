@@ -4,6 +4,7 @@ import time
 
 from flask import Blueprint, request, jsonify
 
+from routes.config import MAX_SESSIONS
 from routes.helpers import _get_session_store
 
 
@@ -31,6 +32,11 @@ def create_session() -> tuple[dict[str, str], int]:
         return {"error": "Missing or invalid sessionId"}, 400
     
     store = _get_session_store()
+
+    # Simple cap check
+    if len(store) >= MAX_SESSIONS:
+        return {"error": "Maximum number of sessions reached. Please try again later."}, 503
+
     if session_id in store:
         return {"error": "Session already exists"}, 400
     
@@ -157,7 +163,12 @@ def save_session() -> tuple[dict[str, str], int]:
             # If we don't update in place, references held elsewhere may break 
             # and UI will show stale date/endless 'processing' state for an import
             for key, value in new_item.items():
-                if key in ("status", "errorMessage", "updatedAt"):
+                if key in (
+                    "status",
+                    "errorMessage",
+                    "fingerprint512",
+                    "coverage",
+                ):
                     # Do not overwrite job-owned fields
                     continue
                 old_item[key] = value

@@ -15,7 +15,11 @@ export async function postJson<S extends z.ZodTypeAny>(
 
   if (!resp.ok) {
     const text = await resp.text().catch(() => "");
-    throw new Error(`${url} failed (${resp.status})${text ? `: ${text}` : ""}`);
+    // throw new Error(`${url} failed (${resp.status})${text ? `: ${text}` : ""}`);
+    const error: any = new Error(`${url} failed (${resp.status})${text ? `: ${text}` : ""}`);
+    error.status = resp.status;
+    error.body = text;
+    throw error;
   }
 
   // Try to detect "no body" cases

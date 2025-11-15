@@ -5,19 +5,24 @@ import Typography from "@mui/material/Typography";
 import Checkbox from "@mui/material/Checkbox";
 import Chip from "@mui/material/Chip";
 import IconButton from "@mui/material/IconButton";
+import TextField from "@mui/material/TextField";
 import Tooltip from "@mui/material/Tooltip";
 import ScienceIcon from "@mui/icons-material/Science";
 import BiotechIcon from "@mui/icons-material/Biotech";
 import DeleteIcon from "@mui/icons-material/Delete";
 import CircularProgress from "@mui/material/CircularProgress";
+import EditIcon from "@mui/icons-material/Edit";
 import { SessionItem } from "../features/session/types";
 import { alpha } from "@mui/material/styles";
+import type { Theme } from "@mui/material/styles";
+import { CoverageBar } from "./CoverageBar";
 
 type WorkspaceItemCardProps = {
   item: SessionItem;
   selected: boolean;
   onToggleSelect: (id: string) => void;
   onDelete: (id: string) => void;
+  onRename: (id: string, newName: string) => void;
 }
 
 // Helper to format "X ago"
@@ -41,11 +46,38 @@ function formatUpdatedAgo(updatedAt?: number): string {
   return `${diffDays}d ago`;
 }
 
+function getCoverageColor(theme: Theme, value: number): string {
+  const t = theme.vars || theme;
+
+  if (value < 0.5) {
+    return t.palette.error.main;
+  }
+
+  if (value < 0.9) {
+    return t.palette.warning.main;
+  }
+
+  return t.palette.success.main;
+}
+
+function getCoverageTooltip(value: number): string {
+  if (value < 0.5) {
+    return "Low coverage: results may be incomplete or noisey"
+  }
+
+  if (value < 0.9) {
+    return "Moderate coverage: results should be fairly reliable"
+  }
+
+  return "High coverage: results are likely very reliable"
+}
+
 export const WorkspaceItemCard: React.FC<WorkspaceItemCardProps> = ({
   item,
   selected,
   onToggleSelect,
-  onDelete
+  onDelete,
+  onRename,
 }) => {
   const isCompound = item.kind === "compound"; // there are only two types: "compound" and "gene_cluster"
 
@@ -62,6 +94,50 @@ export const WorkspaceItemCard: React.FC<WorkspaceItemCardProps> = ({
   const showSpinner = item.status === "processing";
   const isError = item.status === "error";
   const isDone = item.status === "done";
+
+  // Rename state
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [draftName, setDraftName] = React.useState(item.name);
+
+  // Keep draft in sync when item.name changes from server
+  React.useEffect(() => {
+    if (!isEditing) {
+      setDraftName(item.name);
+    }
+  }, [item.name, isEditing]);
+
+  const startEditing = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDraftName(item.name);
+    setIsEditing(true);
+  }
+
+  const cancelEditing = () => {
+    setDraftName(item.name);
+    setIsEditing(false);
+  }
+
+  const commitEditing = () => {
+    const trimmed = draftName.trim();
+    // No-op if unchanged or empty
+    if (!trimmed || trimmed === item.name) {
+      setIsEditing(false);
+      setDraftName(item.name);
+      return;
+    }
+    onRename(item.id, trimmed);
+    setIsEditing(false);
+  }
+
+  const handleNameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      commitEditing();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      cancelEditing();
+    }
+  }
 
   return (
     <Box
@@ -100,12 +176,65 @@ export const WorkspaceItemCard: React.FC<WorkspaceItemCardProps> = ({
         )}
 
         <Box>
-          <Typography variant="body2" fontWeight={500} noWrap>
-            {isCompound ? item.name : item.fileName}
-          </Typography>
+          {/* <Typography variant="body2" fontWeight={500} noWrap> */}
+            {/* {isCompound ? item.name : item.name} */}
+          {/* </Typography> */}
+          <Stack direction="row" spacing={0.5} alignItems="center">
+            {isEditing ? (
+              <TextField
+                size="small"
+                variant="standard"
+                value={draftName}
+                autoFocus
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => setDraftName(e.target.value)}
+                onKeyDown={handleNameKeyDown}
+                onBlur={commitEditing}
+                inputProps={{
+                  style: { fontSize: "0.875rem", fontWeight: 500 },
+                }}
+              /> 
+            ) : (
+              <>
+                <Typography
+                  variant="body2"
+                  fontWeight={500}
+                  noWrap
+                  sx={{ maxWidth: 220 }}
+                >
+                  {item.name}
+                </Typography>
+                <EditIcon
+                  onClick={startEditing}
+                  sx={{
+                    fontSize: 16,
+                    cursor: "pointer",
+                    ml: 0.5
+                  }}
+                />
+              </>
+            )}
+          </Stack>
+
+          {isDone && isCompound && item.coverage !== undefined && (
+            <CoverageBar
+              coverage={item.coverage ? item.coverage : 0}
+              getTooltipTitle={getCoverageTooltip}
+              getCoverageColor={getCoverageColor}
+              width={150}
+              height={10}
+              tooltipPosition="right"
+            />
+          )}
+
           <Typography variant="caption" color="text.secondary">
             Updated {formatUpdatedAgo(item.updatedAt)}
           </Typography>
+
+          {/* Add component for gene clusters that is same height as CoverageBar */}
+          {!isCompound && (
+            <Box sx={{ height: 14 }} />
+          )}
         </Box>
       </Stack>
       
