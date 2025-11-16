@@ -56,7 +56,7 @@ export const WorkspaceExplore: React.FC<WorkspaceExploreProps> = ({ session, set
             Items from the&nbsp;
             <MuiLink
               component={RouterLink}
-              to="/dashboard/explore"
+              to="/dashboard/upload"
               underline="hover"
               color={(theme.vars || theme).palette.primary.main}
               sx={{ fontWeight: "500" }}
