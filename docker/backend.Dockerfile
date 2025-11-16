@@ -18,4 +18,4 @@ ENV PORT=4000
 EXPOSE 4000
 
 # Let Flask/gunicorn find the app: "app:app"
-CMD ["gunicorn", "-w", "3", "-b", "0.0.0.0:4000", "app:app"]
+CMD ["gunicorn", "-w", "3", "-b", "0.0.0.0:4000", "--access-logfile", "-", "--error-logfile", "-", "--log-level", "info", "--timeout", "120", "app:app"]

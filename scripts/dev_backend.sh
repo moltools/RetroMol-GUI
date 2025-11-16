@@ -16,6 +16,10 @@ export DB_NAME=bionexus
 export DB_USER=app_ro
 export DB_PASS=apppass_ro
 
+# Redis connection (uses Dockerized Redis)
+export REDIS_URL="redis://localhost:6379/0"
+export SESSION_TTL_SECONDS=$((7 * 24 * 3600))
+
 # Make sure Flask can find the app
 export PYTHONPATH="$(pwd)/src/server"
 

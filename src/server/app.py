@@ -1,20 +1,18 @@
 """Module for configuring the Flask app."""
 
-import atexit
+import logging
 import os
 import time
 
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.interval import IntervalTrigger
 from flask import Flask, jsonify
 
-from routes.helpers import SESSIONS_KEY
 from routes.session import (
     blp_create_session,
     blp_delete_session,
     blp_get_session,
     blp_save_session,
 )
+from routes.session_store import get_or_init_app_start_epoch
 from routes.query import dsn_from_env, blp as query_blp
 from routes.jobs import (
     blp_submit_compound,
@@ -24,8 +22,24 @@ from routes.jobs import (
 
 # Initialize the Flask app
 app = Flask(__name__)
-sessions_key = SESSIONS_KEY
-app.config[sessions_key] = dict()
+
+# Logging setup
+# In development: simple basicConfig
+# In production (under gunicorn): reuse gunicorn's error logger handlers
+if os.getenv("FLASK_ENV") == "development":
+    logging.basicConfig(level=logging.DEBUG)
+    app.logger.setLevel(logging.DEBUG)
+else:
+    gunicorn_logger = logging.getLogger("gunicorn.error")
+    if gunicorn_logger.handlers:
+        app.logger.handlers = gunicorn_logger.handlers
+        app.logger.setLevel(gunicorn_logger.level)
+    else:
+        # Fallback if not under gunicorn
+        logging.basicConfig(level=logging.INFO)
+        app.logger.setLevel(logging.INFO)
+
+app.logger.info("Flask logger configured")
 
 
 # Set environment and debug mode
@@ -42,42 +56,6 @@ elif app.config["ENV"] == "development":
     print("development environment detected")
 else:
     print(f"unknown environment: {app.config['ENV']}")
-
-
-# Add start epoch time of the server to the config
-app.config["START_EPOCH"] = int(time.time())
-
-
-def clear_sessions() -> None:
-    """
-    Clear the job results. 
-    """
-    for session in list(app.config[sessions_key]):
-
-        # Find out how long the session has been stored
-        timestamp = app.config[sessions_key][session]["created"]
-        current_time = int(time.time())
-        time_stored = current_time - timestamp
-
-        # If stored longer than 1 day, delete the session
-        if time_stored >= 86400 * 7:  # 7 days in seconds
-            del app.config[sessions_key][session]
-
-
-# Set up a scheduler to run the clear_sessions function every week
-scheduler = BackgroundScheduler()
-scheduler.start()
-scheduler.add_job(
-    func=clear_sessions,
-    trigger=IntervalTrigger(days=1),
-    id="clear_sessions",
-    name="clear sessions every week",
-    replace_existing=True,
-)
-
-
-# Shut down the scheduler when exiting the app
-atexit.register(lambda: scheduler.shutdown())
 
 
 # Register api endpoints
@@ -109,7 +87,7 @@ def startup() -> tuple[dict[str, int], int]:
     
     :return: a dictionary with startup, current time, uptime and HTTP status code
     """
-    startup_epoch = app.config["START_EPOCH"]
+    startup_epoch = get_or_init_app_start_epoch()
     return jsonify({
         "startup": startup_epoch,
         "current": int(time.time()),

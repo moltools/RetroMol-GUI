@@ -2,4 +2,10 @@
 services:
   db:
     ports:
-      - "5432:5432"   # expose to host for local backend
+      - "5432:5432"  # expose to host for local backend
+
+  redis:
+    # No authentication for local development
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"  # expose to host for local backend

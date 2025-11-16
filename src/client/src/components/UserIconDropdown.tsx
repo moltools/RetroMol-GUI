@@ -116,7 +116,7 @@ export const UserIconDropdown: React.FC<IconButtonOwnProps> = (props) => {
       <DialogContent>
         <DialogContentText>
           Do you really want to delete your session?<br /><br />
-          All sessions will be automatically deleted <b>seven days</b> after session creation.
+          All sessions will be automatically deleted <b>seven days</b> after session inactivity.
           Deleting your session will remove all your uploaded data immediately. You will not be able to retrieve it later.
         </DialogContentText>
       </DialogContent>

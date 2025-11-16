@@ -4,15 +4,28 @@ Graphical user interface for trying out RetroMol.
 
 This repository contains both a production-ready Docker setup and a developer-friendly local workflow.
 
-## Build and run with Docker
+---
+
+## Overview
+
+The system runs four services:
+- web: React UI served by nginx
+- backend: FLask API served by gunicorn
+- db: PostgreSQL with pgvector
+- redis: in-memory session and job state store
+
+Redis ensures that sessions and job states survive worker restarts and that all backend workers share consistent shared state.
+
+---
+
+## Build and run with Docker (production mode)
 
 The default setup runs everything containerized:
 - Builds and serves the frontend React app behind nginx
 - Runs the Flask backend with gunicorn
 - Runs PostgreSQL and initializes it from a dump file
+- Runs Redis for session/job state
 - Exposes a read-only DB user for the backend
-
----
 
 ### Start the full stack
 
@@ -24,14 +37,14 @@ Then run:
 docker compose up -d --build
 ```
 
+The backend itself loads Redis and DB configuration from `docker/backend.env`.
+
 ### Access the application 
 
 - App UI: `http://<server-ip>/**`
 - API endpoints: `http://<server-ip>/api/...**`
 
 For local user, `<server-ip>` is typically `localhost:4005`.
-
----
 
 ### Database persistence
 
@@ -49,8 +62,6 @@ To remove the volume (and all data inside), run:
 docker volume rm <volume_name>
 ```
 
----
-
 ### Re-seed the database
 
 Postgres will initialize once from the dump file specified in `.env` (make sure to copy `.env.example` to `.env` and edit before first build).
@@ -61,8 +72,6 @@ To re-seed the database:
 docker compose down -v  # destroys db_data volume
 docker compose up -d --build
 ```
-
----
 
 ### Check container health
 
@@ -91,14 +100,12 @@ curl -i http://localhost:4005/api/ready  # should return 200 OK (DB connection O
 
 You can develop with hot-reloading for both backend and frontend, while still using the database from Docker.
 
----
-
 ### Start only the database (in Docker)
 
 Expose Postgres to your host for local development:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db redis
 ```
 
 This keeps the database running at:
@@ -110,7 +117,11 @@ Password: apppass_ro
 DB name: bionexus
 ```
 
----
+Redis available at:
+```
+host: localhost
+port: 6379
+```
 
 ### Run the backend locally
 
@@ -123,7 +134,7 @@ Then, run the helper script:
 ```
 
 This script:
-- Sets up DB connection variables
+- Exports DB_HOST=localhost and REDIS_URL=redis://localhost:6379/0
 - Runs Flask in debug mode with auto-reload on port 4000
 
 Verify health endpoint to check backend is running:
@@ -131,8 +142,6 @@ Verify health endpoint to check backend is running:
 ```bash
 curl -i http://localhost:4000/api/health
 ```
-
----
 
 ### Run the frontend locally
 
@@ -153,3 +162,19 @@ Ensure the `package.json` has the proxy set to the backend URL:
 ```
 
 Requests to `/api/...` will automatically proxy to Flask.
+
+---
+
+## Summary
+
+Production:
+```bash
+docker compose up -d --build
+```
+
+Local development:
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db redis
+bash ./scripts/dev_backend.sh
+cd src/client && npm start
+```

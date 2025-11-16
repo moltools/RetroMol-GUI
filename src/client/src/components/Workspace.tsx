@@ -1,6 +1,7 @@
 import React from "react";
 import Box from "@mui/material/Box";
 import Stack from "@mui/material/Stack";
+import Fade from "@mui/material/Fade";
 import { alpha } from "@mui/material/styles";
 import { Routes, Route, useNavigate } from "react-router-dom";
 import { useNotifications } from "../components/NotificationProvider";
@@ -100,9 +101,13 @@ export const Workspace: React.FC = () => {
     })
   }, [session, pushNotification]);
 
-  // While loading, render nothing (overlay is shown)
-  if (loading) return null; 
-  if (!session) return null; // should not happen, but TS type guard
+  if (!session && !loading) {
+    // Hard failure; couldn't load session at all
+    return null;
+  }
+
+  // Determine what to show
+  const showContent = !!session && !loading;
 
   return (
     <Box sx={{ display: "flex"}}>
@@ -123,11 +128,20 @@ export const Workspace: React.FC = () => {
           sx={{ alignItems: "center", mx: 3, pb: 5, mt: { xs: 8, md: 0 } }}
         >
           <WorkspaceHeader />
-          <Routes>
-            <Route index element={<WorkspaceDashboard />} />
-            <Route path="upload" element={<WorkspaceUpload session={session} setSession={setSessionLocal} />} />
-            <Route path="explore" element={<WorkspaceExplore session={session} setSession={setSessionLocal} />} />
-          </Routes>
+            
+          {/* Actual workspace content fades in once session is ready */}
+          {session && (
+            <Fade in={showContent} timeout={200} unmountOnExit>
+              <Box sx={{ width: "100%" }}>
+                <Routes>
+                  <Route index element={<WorkspaceDashboard />} />
+                  <Route path="upload" element={<WorkspaceUpload session={session} setSession={setSessionLocal} />} />
+                  <Route path="explore" element={<WorkspaceExplore session={session} setSession={setSessionLocal} />} />
+                </Routes>
+              </Box>
+            </Fade>
+          )}
+          
         </Stack>
       </Box>
     </Box>

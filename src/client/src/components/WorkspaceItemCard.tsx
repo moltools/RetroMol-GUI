@@ -12,6 +12,7 @@ import BiotechIcon from "@mui/icons-material/Biotech";
 import DeleteIcon from "@mui/icons-material/Delete";
 import CircularProgress from "@mui/material/CircularProgress";
 import EditIcon from "@mui/icons-material/Edit";
+import VisibilityIcon from "@mui/icons-material/Visibility";
 import { SessionItem } from "../features/session/types";
 import { alpha } from "@mui/material/styles";
 import type { Theme } from "@mui/material/styles";
@@ -21,6 +22,7 @@ type WorkspaceItemCardProps = {
   item: SessionItem;
   selected: boolean;
   onToggleSelect: (id: string) => void;
+  onView: (id: string) => void;
   onDelete: (id: string) => void;
   onRename: (id: string, newName: string) => void;
 }
@@ -76,6 +78,7 @@ export const WorkspaceItemCard: React.FC<WorkspaceItemCardProps> = ({
   item,
   selected,
   onToggleSelect,
+  onView,
   onDelete,
   onRename,
 }) => {
@@ -175,10 +178,7 @@ export const WorkspaceItemCard: React.FC<WorkspaceItemCardProps> = ({
           <BiotechIcon fontSize="small" />
         )}
 
-        <Box>
-          {/* <Typography variant="body2" fontWeight={500} noWrap> */}
-            {/* {isCompound ? item.name : item.name} */}
-          {/* </Typography> */}
+        <Stack direction="column" spacing={0.5}>
           <Stack direction="row" spacing={0.5} alignItems="center">
             {isEditing ? (
               <TextField
@@ -204,17 +204,23 @@ export const WorkspaceItemCard: React.FC<WorkspaceItemCardProps> = ({
                 >
                   {item.name}
                 </Typography>
-                <EditIcon
-                  onClick={startEditing}
-                  sx={{
-                    fontSize: 16,
-                    cursor: "pointer",
-                    ml: 0.5
-                  }}
-                />
+                {isDone && (
+                  <EditIcon
+                    onClick={startEditing}
+                    sx={{
+                      fontSize: 16,
+                      cursor: "pointer",
+                      ml: 0.5
+                    }}
+                  />
+                )}
               </>
             )}
           </Stack>
+
+          <Typography variant="caption" color="text.secondary">
+            Status updated {formatUpdatedAgo(item.updatedAt)}
+          </Typography>
 
           {isDone && isCompound && item.coverage !== undefined && (
             <CoverageBar
@@ -227,15 +233,11 @@ export const WorkspaceItemCard: React.FC<WorkspaceItemCardProps> = ({
             />
           )}
 
-          <Typography variant="caption" color="text.secondary">
-            Updated {formatUpdatedAgo(item.updatedAt)}
-          </Typography>
-
           {/* Add component for gene clusters that is same height as CoverageBar */}
           {!isCompound && (
-            <Box sx={{ height: 14 }} />
+            <Box sx={{ height: 10 }} />
           )}
-        </Box>
+        </Stack>
       </Stack>
       
       <Stack direction="row" spacing={1} alignItems="center">
@@ -273,6 +275,16 @@ export const WorkspaceItemCard: React.FC<WorkspaceItemCardProps> = ({
             />
           </Tooltip>
         )}
+
+        <IconButton
+          size="small"
+          onClick={(e) => {
+            e.stopPropagation();
+            onView(item.id);
+          }}
+        >
+          <VisibilityIcon fontSize="small" />
+        </IconButton>
 
         <IconButton
           size="small"

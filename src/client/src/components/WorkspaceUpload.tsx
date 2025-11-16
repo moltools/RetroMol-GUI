@@ -12,6 +12,7 @@ import { useNotifications } from "../components/NotificationProvider";
 import { Link as RouterLink } from "react-router-dom";
 import { DialogImportCompound } from "./DialogImportCompound";
 import { DialogImportGeneCluster } from "./DialogImportGeneCluster";
+import { DialogViewItem } from "./DialogViewItem";
 import { WorkspaceItemCard } from "./WorkspaceItemCard";
 import { Session, SessionItem } from "../features/session/types";
 import { saveSession } from "../features/session/api";
@@ -81,6 +82,8 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
 
   const [openCompounds, setOpenCompounds] = React.useState(false);
   const [openGeneClusters, setOpenGeneClusters] = React.useState(false);
+  const [openView, setOpenView] = React.useState(false);
+  const [viewingItemId, setViewingItemId] = React.useState<string | null>(null);
 
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
 
@@ -90,14 +93,16 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
       ...prev,
       items: prev.items.map((item) => 
         item.id === id
-          ? {
-              ...item,
-              name: newName,
-              updatedAt: Date.now(),
-            }
+          ? { ...item, name: newName }
           : item
       ),
     }))
+  }
+
+  // Viewing helper
+  const handleViewItem = (id: string) => {
+    setViewingItemId(id);
+    setOpenView(true);
   }
 
   // Selection helpers
@@ -472,6 +477,15 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
         onImport={handleImportGeneClusters}
       />
 
+      <DialogViewItem
+        open={openView}
+        itemId={viewingItemId}
+        onClose={() => {
+          setOpenView(false);
+          setViewingItemId(null);
+        }}
+      />
+
       {session.items.length > 0 && (
         <Card variant="outlined">
           <CardContent>
@@ -521,6 +535,7 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
                   selected={selectedIds.has(item.id)}
                   onToggleSelect={toggleSelectItem}
                   onDelete={handleDeleteItem}
+                  onView={handleViewItem}
                   onRename={handleRenameItem}
                 />
               ))}

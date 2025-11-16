@@ -21,6 +21,26 @@ services:
       retries: 20
     networks: [ retromol_network ]
 
+  redis:
+    image: redis:7
+    container_name: retromol_redis
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
+    # No ports: exposed only inside the Docker network
+    networks: [ retromol_network ]
+
+  maintenance:
+    build:
+      context: .
+      dockerfile: ./docker/backend.Dockerfile
+    container_name: retromol_maintenance
+    env_file:
+      - ./docker/backend.env
+    depends_on:
+      redis:
+        condition: service_started
+    command: ["python", "-m", "maintenance"]
+    networks: [ retromol_network ]
+
   backend:
     build:
       context: .
@@ -31,6 +51,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_started
     networks: [ retromol_network ]
 
   web:

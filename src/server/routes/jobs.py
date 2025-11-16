@@ -4,58 +4,29 @@ import hashlib
 import time
 from random import random
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, current_app, request, jsonify
 
-from routes.helpers import _get_session_store
+from routes.session_store import load_session_with_items, update_item
+
 
 blp_submit_compound = Blueprint("submit_compound", __name__)
 blp_submit_gene_cluster = Blueprint("submit_gene_cluster", __name__)
 
 
-def _find_session(session_id: str) -> dict | None:
+def _set_item_status_inplace(item: dict, status: str, error_message: str | None = None) -> None:
     """
-    Find and return a session by its ID.
-
-    :param session_id: the ID of the session to find
-    :return: the session dictionary if found, else None
-    """
-    sessions = _get_session_store()
-    return sessions.get(session_id)
-
-
-def _find_item(session: dict, item_id: str) -> dict | None:
-    """
-    Find and return an item by its ID within a given session.
-
-    :param session: the session dictionary containing items
-    :param item_id: the ID of the item to find
-    :return: the item dictionary if found, else None
-    """
-    items = session.get("items", [])
-    for item in items:
-        if item.get("id") == item_id:
-            return item
-    return None
-
-
-def _set_item_status(item: dict, status: str, error_message: str | None = None) -> None:
-    """
-    Update the status and error message of a given item.
+    Update the status and error message of an item in place.
 
     :param item: the item dictionary to update
-    :param status: the new status to set
-    :param error_message: optional error message to set
-    .. note:: this function modifies the item in place.
+    :param status: the new status string
+    :param error_message: optional error message string
     """
     item["status"] = status
-
-    # Store ms since epoch; matches frontend convention
     item["updatedAt"] = int(time.time() * 1000)
 
     if error_message is not None:
         item["errorMessage"] = error_message
     else:
-        # Clear old errors if any
         if "errorMessage" in item:
             item["errorMessage"] = None
 
@@ -92,39 +63,68 @@ def submit_compound():
     name = payload.get("name")
     smiles = payload.get("smiles")
 
+    current_app.logger.info(f"submit_compound called: session_id={session_id} item_id={item_id}")
+
     if not session_id or not item_id:
+        current_app.logger.warning("submit_compound: missing sessionId or itemId")
         return jsonify({"error": "Missing sessionId or itemId"}), 400
     
-    sess = _find_session(session_id)
-    if sess is None:
+    # Validate session + item exists and kind is correct
+    full_sess = load_session_with_items(session_id)
+    if full_sess is None:
+        current_app.logger.warning(f"submit_compound: session not found: {session_id}")
         return jsonify({"error": "Session not found"}), 404
     
-    item = _find_item(sess, item_id)
+    item = next((it for it in full_sess.get("items", []) if it.get("id") == item_id), None)
     if item is None:
+        current_app.logger.warning(f"submit_compound: item not found: {item_id}")
         return jsonify({"error": "Item not found"}), 404
     
     if item.get("kind") != "compound":
+        current_app.logger.warning(f"submit_compound: wrong kind={item.get('kind')}")
         return jsonify({"error": "Item is not a compound"}), 400
 
     t0 = time.time()
 
-    # TODO: update item details; include more processing in future
-    item["name"] = name or item.get("name")
-    item["smiles"] = smiles or item.get("smiles")
+    # Set status=processing early on this item only
+    def mark_processing(it: dict) -> None:
+        """
+        Update item details and mark as processing.
 
-    # Mark as processing before doing any work
-    _set_item_status(item, "processing")
+        :param it: the item dictionary to update
+        """
+        it["name"] = name or it.get("name")
+        it["smiles"] = smiles or it.get("smiles")
+        _set_item_status_inplace(it, "processing")
+
+    ok = update_item(session_id, item_id, mark_processing)
+    if not ok:
+        current_app.logger.warning(f"submit_compound: failed to mark item as processing: {item_id}")
+        return jsonify({"error": "Item not found during update"}), 404
     
     try:
-        # Calculate fingerprint
+        # Heavy work
         fp_hex = _compute_fingerprint_512()
-        item["fingerprint512"] = fp_hex
-        item["coverage"] = round(random(), 2)  # dummy coverage value between 0 and 1
+        coverage = round(random(), 2)  # dummy coverage value between 0 and 1
 
-        # Finished successfully
-        _set_item_status(item, "done")
+        # Set final status=done and store results on this item only
+        def mark_done(it: dict) -> None:
+            it["name"] = name or it.get("name")
+            it["smiles"] = smiles or it.get("smiles")
+            it["fingerprint512"] = fp_hex
+            it["coverage"] = coverage
+            _set_item_status_inplace(it, "done")
+
+        update_item(session_id, item_id, mark_done)
+
     except Exception as e:
-        _set_item_status(item, "error", error_message=str(e))
+        current_app.logger.exception(f"submit_compound: error for item_id={item_id}")
+
+        def mark_error(it: dict) -> None:
+            _set_item_status_inplace(it, "error", error_message=str(e))
+
+        update_item(session_id, item_id, mark_error)
+
         elapsed = int((time.time() - t0) * 1000)
         return jsonify({
             "ok": False,
@@ -134,6 +134,8 @@ def submit_compound():
         }), 500
     
     elapsed = int((time.time() - t0) * 1000)
+    current_app.logger.info(f"submit_compound: finished item_id={item_id} elapsed_ms={elapsed}")
+
     return jsonify({
         "ok": True,
         "status": "done",
@@ -161,38 +163,66 @@ def submit_gene_cluster():
     name = payload.get("name")
     file_content = payload.get("fileContent")
 
+    current_app.logger.info(f"submit_gene_cluster called: session_id={session_id} item_id={item_id}")
+
     if not session_id or not item_id:
+        current_app.logger.warning("submit_gene_cluster: missing sessionId or itemId")
         return jsonify({"error": "Missing sessionId or itemId"}), 400
     
-    sess = _find_session(session_id)
-    if sess is None:
+    # Validate session + item exists and kind is correct
+    full_sess = load_session_with_items(session_id)
+    if full_sess is None:
+        current_app.logger.warning(f"submit_gene_cluster: session not found: {session_id}")
         return jsonify({"error": "Session not found"}), 404
     
-    item = _find_item(sess, item_id)
+    item = next((it for it in full_sess.get("items", []) if it.get("id") == item_id), None)
     if item is None:
+        current_app.logger.warning(f"submit_gene_cluster: item not found: {item_id}")
         return jsonify({"error": "Item not found"}), 404
     
     if item.get("kind") != "gene_cluster":
+        current_app.logger.warning(f"submit_gene_cluster: wrong kind={item.get('kind')}")
         return jsonify({"error": "Item is not a gene cluster"}), 400
 
     t0 = time.time()
 
-    # TODO: update item details; include more processing in future
-    item["name"] = name or item.get("name")
-    item["fileContent"] = file_content or item.get("fileContent")
+    # Set status=processing early on this item only
+    def mark_processing(it: dict) -> None:
+        """
+        Update item details and mark as processing.
 
-    # Mark as processing before doing any work
-    _set_item_status(item, "processing")
+        :param it: the item dictionary to update
+        """
+        it["name"] = name or it.get("name")
+        it["fileContent"] = file_content or it.get("fileContent")
+        _set_item_status_inplace(it, "processing")
     
+    ok = update_item(session_id, item_id, mark_processing)
+    if not ok:
+        current_app.logger.warning(f"submit_gene_cluster: failed to mark item as processing: {item_id}")
+        return jsonify({"error": "Item not found during update"}), 404
+
     try:
-        # Calculate fingerprint
+        # Heavy work
         fp_hex = _compute_fingerprint_512()
-        item["fingerprint512"] = fp_hex
         
-        # Finished successfully
-        _set_item_status(item, "done")
+        # Set final status=done and store results on this item only
+        def mark_done(it: dict) -> None:
+            it["name"] = name or it.get("name")
+            it["fileContent"] = file_content or it.get("fileContent")
+            it["fingerprint512"] = fp_hex
+            _set_item_status_inplace(it, "done")
+
+        update_item(session_id, item_id, mark_done)
+
     except Exception as e:
-        _set_item_status(item, "error", error_message=str(e))
+        current_app.logger.exception(f"submit_gene_cluster: error for item_id={item_id}")
+
+        def mark_error(it: dict) -> None:
+            _set_item_status_inplace(it, "error", error_message=str(e))
+        
+        update_item(session_id, item_id, mark_error)
+        
         elapsed = int((time.time() - t0) * 1000)
         return jsonify({
             "ok": False,
@@ -202,6 +232,8 @@ def submit_gene_cluster():
         }), 500
     
     elapsed = int((time.time() - t0) * 1000)
+    current_app.logger.info(f"submit_gene_cluster: finished item_id={item_id} elapsed_ms={elapsed}")
+
     return jsonify({
         "ok": True,
         "status": "done",

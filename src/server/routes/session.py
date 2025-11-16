@@ -4,8 +4,14 @@ import time
 
 from flask import Blueprint, request, jsonify
 
-from routes.config import MAX_SESSIONS
-from routes.helpers import _get_session_store
+from routes.session_store import (
+    MAX_SESSIONS,
+    create_session as redis_create_session,
+    delete_session as redis_delete_session,
+    load_session_with_items,
+    merge_session_from_client,
+    count_sessions,
+)
 
 
 blp_create_session = Blueprint("create_session", __name__)
@@ -31,30 +37,16 @@ def create_session() -> tuple[dict[str, str], int]:
     if not isinstance(session_id, str) or not session_id:
         return {"error": "Missing or invalid sessionId"}, 400
     
-    store = _get_session_store()
-
-    # Simple cap check
-    if len(store) >= MAX_SESSIONS:
-        return {"error": "Maximum number of sessions reached. Please try again later."}, 503
-
-    if session_id in store:
-        return {"error": "Session already exists"}, 400
+    # Hard(ish) cap on total sessions to prevent disk bloat
+    current = count_sessions()
+    if current >= MAX_SESSIONS:
+        return {"error": "Maximum number of sessions reached"}, 503
     
-    # Basic normalization for safety
-    created = new_session.get("created")
-    if not isinstance(created, (int, float)):
-        created = int(time.time() * 1000)
-    else:
-        created = int(created)
-
-    items = new_session.get("items", [])
-    if not isinstance(items, list):
-        items = []
-
-    new_session["created"] = created
-    new_session["items"] = items
-
-    store[session_id] = new_session
+    # Let Redis throw if something is wrong; we assume new session
+    try:
+        redis_create_session(new_session)
+    except Exception as e:
+        return {"error": str(e)}, 400
 
     return jsonify({"sessionId": session_id}), 200
 
@@ -72,11 +64,13 @@ def delete_session() -> tuple[dict[str, str], int]:
     if not isinstance(session_id, str) or not session_id:
         return {"error": "Missing or invalid sessionId"}, 400
 
-    store = _get_session_store()
-    if session_id not in store:
+    # Check existence
+    sess = load_session_with_items(session_id)
+    if sess is None:
         return {"error": "Session not found"}, 404
-    
-    del store[session_id]
+
+    redis_delete_session(session_id)
+
     return jsonify({"sessionId": session_id}), 200
 
 
@@ -93,18 +87,17 @@ def get_session() -> tuple[dict[str, str], int]:
     if not isinstance(session_id, str) or not session_id:
         return {"error": "Missing or invalid sessionId"}, 400
 
-    store = _get_session_store()
-    session = store.get(session_id)
-    if session is None:
+    full = load_session_with_items(session_id)
+    if full is None:
         return {"error": "Session not found"}, 404
     
     # Ensure items is always a list so the frontend + Zod don't complain
-    items = session.get("items", [])
+    items = full.get("items", [])
     if not isinstance(items, list):
         items = []
-        session["items"] = items
+        full["items"] = items
 
-    return jsonify({"sessionId": session["sessionId"], "session": session}), 200
+    return jsonify({"sessionId": full["sessionId"], "session": full}), 200
 
 
 @blp_save_session.route("/api/saveSession", methods=["POST"])
@@ -128,57 +121,15 @@ def save_session() -> tuple[dict[str, str], int]:
     if not isinstance(new_session, dict):
         return {"error": "Missing or invalid session"}, 400
     
-    session_id = new_session.get("sessionId")
-    if not session_id:
-        return {"error": "Missing sessionId"}, 400
+    try:
+        merge_session_from_client(new_session)
+    except ValueError as e:
+        # Use 404 for "Session not found"
+        msg = str(e)
+        if "Session not found" in msg:
+            return {"error": msg}, 404
+        return {"error": msg}, 400
     
-    # Make sure SESSIONS exists
-    store = _get_session_store()
-
-    old_session = store.get(session_id)
-    if not old_session:
-        return {"error": "Session not found"}, 404
-
-    old_items_list = old_session.get("items", []) or []
-    new_items_list = new_session.get("items", []) or []
-
-    # Index existing items by id
-    old_by_id: dict[str, dict] = {item.get("id"): item for item in old_items_list if item.get("id")}
-    merged_items: list[dict] = []
-
-    for new_item in new_items_list:
-        item_id = new_item.get("id")
-        if not item_id:
-            # No id? Just accept as-is (or skip, your choice)
-            merged_items.append(new_item)
-            continue
-
-        old_item = old_by_id.get(item_id)
-
-        if old_item is None:
-            # Truly new item: accept the client version
-            merged_items.append(new_item)
-        else:
-            # Update existing item IN PLACE, BUT keep status fields from server
-            # If we don't update in place, references held elsewhere may break 
-            # and UI will show stale date/endless 'processing' state for an import
-            for key, value in new_item.items():
-                if key in (
-                    "status",
-                    "errorMessage",
-                    "fingerprint512",
-                    "coverage",
-                ):
-                    # Do not overwrite job-owned fields
-                    continue
-                old_item[key] = value
-
-            merged_items.append(old_item)
-
-    # Items omitted by client are considered deleted: we do NOT re-add leftovers
-    # from old_by_id here.
-
-    old_session["items"] = merged_items
-    store[session_id] = old_session
+    session_id = new_session.get("sessionId")
 
     return jsonify({"sessionId": session_id}), 200
