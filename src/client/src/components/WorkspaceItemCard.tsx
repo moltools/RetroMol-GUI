@@ -179,7 +179,7 @@ export const WorkspaceItemCard: React.FC<WorkspaceItemCardProps> = ({
         )}
 
         <Stack direction="column" spacing={0.5}>
-          <Stack direction="row" spacing={0.5} alignItems="center">
+          <Stack direction="row" spacing={0.5} alignItems="center" width="200px">
             {isEditing ? (
               <TextField
                 size="small"
@@ -235,7 +235,7 @@ export const WorkspaceItemCard: React.FC<WorkspaceItemCardProps> = ({
 
           {/* Add component for gene clusters that is same height as CoverageBar */}
           {!isCompound && (
-            <Box sx={{ height: 10 }} />
+            <Box sx={{ height: 18 }} />
           )}
         </Stack>
       </Stack>

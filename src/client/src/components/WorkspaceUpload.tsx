@@ -457,7 +457,7 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
             <Button variant="contained" onClick={() => setOpenCompounds(true)}>
               Import compounds
             </Button>
-            <Button variant="contained" onClick={() => setOpenGeneClusters(true)}>
+            <Button variant="contained" onClick={() => setOpenGeneClusters(true)} disabled>
               Import gene clusters
             </Button>
           </Stack>

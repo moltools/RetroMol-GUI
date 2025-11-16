@@ -12,6 +12,7 @@ type SQLRow = {
 
 type HistogramProps = {
   rows: SQLRow[]; // array of data rows from SQL query
+  dataLabel?: string; // label for the data series
   binSize?: number;  // size of each bin
   roundBinEdgeTo?: number; // number of decimal places to round bin edges to
   domain?: { min?: number; max?: number }; // optional domain for x-axis
@@ -76,6 +77,7 @@ function normalizeBins(
 
 export const Histogram: React.FC<HistogramProps> = ({
   rows,
+  dataLabel = "Count",
   binSize = 5,
   roundBinEdgeTo = 2,
   domain,
@@ -137,7 +139,7 @@ export const Histogram: React.FC<HistogramProps> = ({
           tickLabelPlacement: "tick",
           tickLabelStyle: { angle: 0, textAnchor: "end", fontSize: 10 },
         }]}
-        series={[ { data: series, label: "Count" } ]}
+        series={[ { data: series, label: dataLabel } ]}
         margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
         height={height}
       />

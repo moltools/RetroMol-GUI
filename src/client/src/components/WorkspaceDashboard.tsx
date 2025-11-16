@@ -127,7 +127,8 @@ export const WorkspaceDashboard: React.FC = () => {
               {resultCov ? (
                 <Histogram
                   rows={histogramFromSQLResults(resultCov)}
-                  title="Mapping coverage parsed NPAtlas compounds"
+                  dataLabel="Number of compounds"
+                  title="Binned coverage of parsed compounds (indicates richness of fingerprint)"
                   height={300}
                   binSize={0.05}
                   domain={{ min: 0, max: 1 }}
@@ -147,7 +148,7 @@ export const WorkspaceDashboard: React.FC = () => {
               {resultFps ? (
                 <PieChart
                   rows={pieFromSQLResults(resultFps, "source", "count_per_source")}
-                  title="Source compound biosynthetic fingerprints (coverage &ge; 0.5)"
+                  title="Number of fingerprints available per source (coverage &ge; 0.5)"
                   height={300}
                   labelFormatter={(label) => labelMap[label.toLowerCase()] ?? label}
                 />

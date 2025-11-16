@@ -18,6 +18,9 @@ from routes.jobs import (
     blp_submit_compound,
     blp_submit_gene_cluster,
 )
+from routes.views import (
+    blp_get_embedding_space,
+)
 
 
 # Initialize the Flask app
@@ -142,3 +145,4 @@ app.register_blueprint(blp_save_session)
 app.register_blueprint(query_blp)
 app.register_blueprint(blp_submit_compound)
 app.register_blueprint(blp_submit_gene_cluster)
+app.register_blueprint(blp_get_embedding_space)

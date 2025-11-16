@@ -2,6 +2,7 @@ import React from "react";
 import Box from "@mui/material/Box";
 import Stack from "@mui/material/Stack";
 import Tooltip from "@mui/material/Tooltip";
+import Typography from "@mui/material/Typography";
 import { alpha, useTheme } from "@mui/material/styles";
 
 type CoverageBarProps = {
@@ -54,6 +55,9 @@ export const CoverageBar: React.FC<CoverageBarProps> = ({
               }}
             />
           </Box>
+          <Typography variant="caption" sx={{ minWidth: 30, textAlign: "right" }}>
+            {(value * 100).toFixed(1)}%
+          </Typography>
         </Stack>
       </Tooltip>
     </Box>

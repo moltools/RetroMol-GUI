@@ -20,12 +20,12 @@ blp_get_session = Blueprint("get_session", __name__)
 blp_save_session = Blueprint("save_session", __name__)
 
 
-@blp_create_session.route("/api/createSession", methods=["POST"])
+@blp_create_session.post("/api/createSession")
 def create_session() -> tuple[dict[str, str], int]:
     """
     Create a new session.
     
-    :return: A tuple containing a dictionary with the session ID and an HTTP status code.
+    :return: a tuple containing a dictionary with the session ID and an HTTP status code.
     """
     payload = request.get_json(force=True) or {}
     new_session = payload.get("session")
@@ -51,12 +51,12 @@ def create_session() -> tuple[dict[str, str], int]:
     return jsonify({"sessionId": session_id}), 200
 
 
-@blp_delete_session.route("/api/deleteSession", methods=["POST"])
+@blp_delete_session.post("/api/deleteSession")
 def delete_session() -> tuple[dict[str, str], int]:
     """
     Delete a session.
     
-    :return: A tuple containing a dictionary with the session ID and an HTTP status code.
+    :return: a tuple containing a dictionary with the session ID and an HTTP status code.
     """
     payload = request.get_json(force=True) or {}
     session_id = payload.get("sessionId")
@@ -74,12 +74,12 @@ def delete_session() -> tuple[dict[str, str], int]:
     return jsonify({"sessionId": session_id}), 200
 
 
-@blp_get_session.route("/api/getSession", methods=["POST"])
+@blp_get_session.post("/api/getSession")
 def get_session() -> tuple[dict[str, str], int]:
     """
     Get a session.
     
-    :return: A tuple containing a dictionary with the session data and an HTTP status code.
+    :return: a tuple containing a dictionary with the session data and an HTTP status code.
     """
     payload = request.get_json(force=True) or {}
     session_id = payload.get("sessionId")
@@ -100,7 +100,7 @@ def get_session() -> tuple[dict[str, str], int]:
     return jsonify({"sessionId": full["sessionId"], "session": full}), 200
 
 
-@blp_save_session.route("/api/saveSession", methods=["POST"])
+@blp_save_session.post("/api/saveSession")
 def save_session() -> tuple[dict[str, str], int]:
     """
     Save/merge a session from the client.
@@ -113,7 +113,7 @@ def save_session() -> tuple[dict[str, str], int]:
         - for new items: accept them as-is
         - items that are missing in the payload are treated as deleted
     
-    :return: A tuple containing a dictionary with the session ID and an HTTP status code.
+    :return: a tuple containing a dictionary with the session ID and an HTTP status code.
     """
     payload = request.get_json(force=True) or {}
     new_session = payload.get("session")

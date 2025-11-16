@@ -8,3 +8,4 @@ redis>=5.0
 retromol==1.1.0
 biocracker==1.1.1
 versalign==2.0.5
+scikit-learn

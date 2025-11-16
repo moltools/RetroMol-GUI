@@ -2,10 +2,19 @@
 
 import hashlib
 import time
-from random import random
 
+import numpy as np
 from flask import Blueprint, current_app, request, jsonify
+from retromol.api import run_retromol
+from retromol.fingerprint import (
+    FingerprintGenerator,
+    NameSimilarityConfig,
+    polyketide_family_of
+)
+from retromol.io import Input as RetroMolInput
+from retromol.rules import get_path_default_matching_rules
 
+from routes.helpers import bits_to_hex
 from routes.session_store import load_session_with_items, update_item
 
 
@@ -31,7 +40,41 @@ def _set_item_status_inplace(item: dict, status: str, error_message: str | None 
             item["errorMessage"] = None
 
 
-def _compute_fingerprint_512() -> str:
+def _setup_fingerprint_generator() -> FingerprintGenerator:
+    """
+    Setup and return a FingerprintGenerator instance.
+
+    :return: FingerprintGenerator instance
+    """
+    path_default_matching_rules = get_path_default_matching_rules()
+    collapse_by_name = ["glycosylation", "methylation"]
+    cfg = NameSimilarityConfig(family_of=polyketide_family_of, symmetric=True, family_repeat_scale=1)
+    generator = FingerprintGenerator(
+        matching_rules_yaml=path_default_matching_rules,
+        collapse_by_name=collapse_by_name,
+        name_similarity=cfg
+    )
+    return generator
+
+
+def _compute_fingerprint_512_compound(generator: FingerprintGenerator, smiles: str) -> tuple[float, str]:
+    """
+    Compute 512-bit fingerprint for a compound given its SMILES.
+
+    :param generator: the fingerprint generator instance
+    :param smiles: the SMILES string of the compound
+    :return: tuple of (coverage, list of fingerprint hex strings)
+    """
+    input_data = RetroMolInput(cid="compound", repr=smiles)
+    result = run_retromol(input_data)
+    cov = result.best_total_coverage()
+    fps: np.ndarray = generator.fingerprint_from_result(result, num_bits=512, counted=False) # shape [N, 512] where N>=1
+    fp: np.ndarray = fps[0] if len(fps) > 0 else np.zeros((512,), dtype=bool)
+    fp_hex_string = bits_to_hex(fp)
+    return cov, fp_hex_string
+
+
+def _compute_fingerprint_512_gene_cluster() -> str:
     """
     Dummy function to compute a 512-bit fingerprint as a hex string (128 chars).
 
@@ -44,7 +87,7 @@ def _compute_fingerprint_512() -> str:
 
 
 @blp_submit_compound.post("/api/submitCompound")
-def submit_compound():
+def submit_compound() -> tuple[dict[str, str], int]:
     """
     Endpoint to submit a compound for processing.
 
@@ -54,7 +97,7 @@ def submit_compound():
       - name: str
       - smiles: str
 
-    :return: JSON response
+    :return: a tuple containing a JSON response and HTTP status code
     """
     payload = request.get_json(force=True) or {}
 
@@ -104,14 +147,14 @@ def submit_compound():
     
     try:
         # Heavy work
-        fp_hex = _compute_fingerprint_512()
-        coverage = round(random(), 2)  # dummy coverage value between 0 and 1
+        generator = _setup_fingerprint_generator()
+        coverage, fp_hex_string = _compute_fingerprint_512_compound(generator, smiles)
 
         # Set final status=done and store results on this item only
         def mark_done(it: dict) -> None:
             it["name"] = name or it.get("name")
             it["smiles"] = smiles or it.get("smiles")
-            it["fingerprint512"] = fp_hex
+            it["fingerprint512"] = fp_hex_string
             it["coverage"] = coverage
             _set_item_status_inplace(it, "done")
 
@@ -144,7 +187,7 @@ def submit_compound():
 
 
 @blp_submit_gene_cluster.post("/api/submitGeneCluster")
-def submit_gene_cluster():
+def submit_gene_cluster()  -> tuple[dict[str, str], int]:
     """
     Endpoint to submit a gene cluster for processing.
 
@@ -154,7 +197,7 @@ def submit_gene_cluster():
       - name: str
       - fileContent: str
 
-    :return: JSON response
+    :return: a tuple containing a JSON response and HTTP status code
     """
     payload = request.get_json(force=True) or {}
 
@@ -204,13 +247,13 @@ def submit_gene_cluster():
 
     try:
         # Heavy work
-        fp_hex = _compute_fingerprint_512()
+        fp_hex_string = _compute_fingerprint_512_gene_cluster()
         
         # Set final status=done and store results on this item only
         def mark_done(it: dict) -> None:
             it["name"] = name or it.get("name")
             it["fileContent"] = file_content or it.get("fileContent")
-            it["fingerprint512"] = fp_hex
+            it["fingerprint512"] = fp_hex_string
             _set_item_status_inplace(it, "done")
 
         update_item(session_id, item_id, mark_done)

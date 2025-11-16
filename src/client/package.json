@@ -10,6 +10,7 @@
     "@mui/icons-material": "^7.3.5",
     "@mui/material": "^7.3.5",
     "@mui/x-charts": "^8.17.0",
+    "@mui/x-data-grid": "^8.18.0",
     "@react-spring/web": "^10.0.3",
     "@react-three/drei": "^8.20.2",
     "@react-three/fiber": "^8.13.5",
