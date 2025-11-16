@@ -6,11 +6,12 @@ This repository contains both a production-ready Docker setup and a developer-fr
 
 ## Overview
 
-The system runs four services:
+The system runs five services:
 - web: React UI served by nginx
 - backend: FLask API served by gunicorn
 - db: PostgreSQL with pgvector
 - redis: in-memory session and job state store
+- maintenance: periodically relabels stale processing jobs
 
 Redis ensures that sessions and job states survive worker restarts and that all backend workers share consistent shared state.
 
@@ -19,6 +20,7 @@ Redis ensures that sessions and job states survive worker restarts and that all 
 The default setup runs everything containerized:
 - Builds and serves the frontend React app behind nginx
 - Runs the Flask backend with gunicorn
+- Runs an additional backend maintenance script that periodically checks for stale jobs
 - Runs PostgreSQL and initializes it from a dump file
 - Runs Redis for session/job state
 - Exposes a read-only DB user for the backend
