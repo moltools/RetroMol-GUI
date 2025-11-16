@@ -4,8 +4,6 @@ Graphical user interface for trying out RetroMol.
 
 This repository contains both a production-ready Docker setup and a developer-friendly local workflow.
 
----
-
 ## Overview
 
 The system runs four services:
@@ -15,8 +13,6 @@ The system runs four services:
 - redis: in-memory session and job state store
 
 Redis ensures that sessions and job states survive worker restarts and that all backend workers share consistent shared state.
-
----
 
 ## Build and run with Docker (production mode)
 
@@ -94,8 +90,6 @@ curl -i http://localhost:4005/api/ready  # should return 200 OK (DB connection O
 > chmod +x db/init/*.sh
 > ```
 
----
-
 ## Local development mode
 
 You can develop with hot-reloading for both backend and frontend, while still using the database from Docker.
@@ -162,8 +156,6 @@ Ensure the `package.json` has the proxy set to the backend URL:
 ```
 
 Requests to `/api/...` will automatically proxy to Flask.
-
----
 
 ## Summary
 
