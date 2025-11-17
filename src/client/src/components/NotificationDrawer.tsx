@@ -6,6 +6,7 @@ import ListItemText from "@mui/material/ListItemText";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import CloseIcon from "@mui/icons-material/Close";
+import ClearAllIcon from "@mui/icons-material/ClearAll";
 import { styled, useTheme } from "@mui/material/styles";
 import { useNotifications } from "./NotificationProvider";
 
@@ -28,13 +29,13 @@ interface NotificationDrawerProps {
 }
 
 export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({ open, handleClose }) => {
-  const { notifications, markAllAsRead } = useNotifications();
+  const { notifications, markAllAsRead, clearNotifications } = useNotifications();
   const theme = useTheme();
 
   // When the drawer opens, mark all notifications as read
   useEffect(() => {
     if (open) { markAllAsRead(); }
-  }, [open])
+  }, [open, markAllAsRead]);
 
   return (
     <Drawer 
@@ -55,16 +56,37 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({ open, ha
         }}
       >
       <Stack spacing={2} width="100%">
-        
-        <CloseIcon 
-          onClick={handleClose} 
-          aria-label="Close notifications" 
-          sx={{ 
-            position: "absolute", 
-            right: 16, 
-            cursor: "pointer", 
+
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            px: 3,
+            pb: 0,
           }}
-        />
+        >
+          <Typography variant="subtitle1">Notifications</Typography>
+          <Box>
+            <ClearAllIcon 
+              onClick={clearNotifications} 
+              aria-label="Clear all notifications" 
+              sx={{ 
+                mr: 2,
+                cursor: "pointer", 
+              }}
+            />
+            <CloseIcon 
+              onClick={handleClose} 
+              aria-label="Close notifications" 
+              sx={{ 
+                position: "absolute", 
+                right: 16, 
+                cursor: "pointer", 
+              }}
+            />
+          </Box>
+        </Box>
 
         {notifications.length === 0 ? (
           <Typography 

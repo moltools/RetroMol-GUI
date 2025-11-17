@@ -16,12 +16,14 @@ export interface NotificationContextType {
   notifications: Notification[];
   pushNotification: (content: string, level?: NotificationLevel) => void;
   markAllAsRead: () => void;
+  clearNotifications: () => void;
 }
 
 const NotificationContext = React.createContext<NotificationContextType>({
   notifications: [],
   pushNotification: () => {},
   markAllAsRead: () => {},
+  clearNotifications: () => {},
 })
 
 export function useNotifications() {
@@ -58,8 +60,12 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     )
   }
 
+  const clearNotifications = () => {
+    setNotifications([]);
+  }
+
   return (
-    <NotificationContext.Provider value={{ notifications, pushNotification, markAllAsRead }}>
+    <NotificationContext.Provider value={{ notifications, pushNotification, markAllAsRead, clearNotifications }}>
       {children}
     </NotificationContext.Provider>
   )
