@@ -312,6 +312,7 @@ def update_item(session_id: str, item_id: str, mutator: Callable[[dict[str, Any]
 SERVER_OWNED_FIELDS = {
     "status",
     "errorMessage",
+    "fingerprints",
     "fingerprint512",
     "coverage",
     "updatedAt",
