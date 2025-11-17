@@ -20,6 +20,9 @@ export DB_PASS=apppass_ro
 export REDIS_URL="redis://localhost:6379/0"
 export SESSION_TTL_SECONDS=$((7 * 24 * 3600))
 
+# Define cache dir for backend (temp files, etc.)
+export CACHE_DIR="$(pwd)/cache"
+
 # Make sure Flask can find the app
 export PYTHONPATH="$(pwd)/src/server"
 
