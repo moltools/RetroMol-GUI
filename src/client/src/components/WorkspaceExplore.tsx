@@ -32,11 +32,11 @@ export const WorkspaceExplore: React.FC<WorkspaceExploreProps> = ({ session, set
   return (
     <Box 
       sx={{ 
-          width: "100%", 
+          width: "100%",
           mx: "auto", 
           display: "flex", 
           flexDirection: "column", 
-          gap: "16px" 
+          gap: "16px",
       }}
     >
       <Card

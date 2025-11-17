@@ -23,6 +23,7 @@ def get_embedding_space() -> tuple[dict[str, str], int]:
 
     session_id = payload.get("sessionId")
     items = payload.get("items", [])
+    jitter = True
 
     current_app.logger.info(f"get_embedding_space called: session_id={session_id} items_count={len(items)}")
 
@@ -30,35 +31,62 @@ def get_embedding_space() -> tuple[dict[str, str], int]:
         current_app.logger.warning("get_embedding_space: missing sessionId or items")
         return jsonify({"error": "Missing sessionId or items"}), 400
     
-    # Make sure every item has an ID
-    item = next((it for it in items if "id" not in it), None)
-    if item is not None:
-        current_app.logger.warning("get_embedding_space: one or more items missing 'id'")
-        return jsonify({"error": "One or more items missing 'id'"}), 400
-    
-    # Make sure every item has a fingerprint512
-    item = next((it for it in items if "fingerprint512" not in it), None)
-    if item is not None:
-        current_app.logger.warning("get_embedding_space: one or more items missing 'fingerprint512'")
-        return jsonify({"error": "One or more items missing 'fingerprint512'"}), 400
+    # Filter out any item that does not have required fields for item
+    required_fields_item = {"id", "kind", "fingerprints"}
+    items = [item for item in items if required_fields_item.issubset(item.keys())]
+
+    # Filter out any item that does not have required fields for fingerprint item
+    required_fields_fp = {"id", "fingerprint512", "score"}
+    for item in items:
+        item["fingerprints"] = [fp_item for fp_item in item["fingerprints"] if required_fields_fp.issubset(fp_item.keys())]
     
     t0 = time.time()
 
+    # Gather all "kind" types; if both "compound" and "gene_cluster" are present, set reduce_fp to True
+    reduce_fp = False
+    kinds = set(item["kind"] for item in items)
+    if "compound" in kinds and "gene_cluster" in kinds:
+        reduce_fp = True
+
     try:
         # Decode fingerprints
-        fps = np.array([hex_to_bits(item["fingerprint512"]) for item in items])
+        kinds, parent_ids, child_ids, fps = [], [], [], []
+        for item in items:
+            for fp_item in item["fingerprints"]:
+                kinds.append(item["kind"])
+                parent_ids.append(item["id"])
+                child_ids.append(fp_item["id"])
+                fps.append(hex_to_bits(fp_item["fingerprint512"]))
 
-        # Perform PCA to reduce to 2D
-        pca = PCA(n_components=2)
-        reduced = pca.fit_transform(fps)
+        # Handle case with no fingerprints
+        if len(fps) == 0:
+            # Return empty points
+            points = []
 
-        points = [
-            {
-                "id": item.get("id"),
-                "x": reduced[i, 0],
-                "y": reduced[i, 1]
-            } for i, item in enumerate(items)
-        ]
+        else:
+            # Convert to numpy array
+            fps = np.array(fps)
+
+            # Reduce dimensionality if needed
+            if reduce_fp:
+                # Remove every bit that is not set in "gene_cluster" fingerprints
+                gene_cluster_fps = fps[[i for i, kind in enumerate(kinds) if kind == "gene_cluster"]]
+                bits_to_keep = np.any(gene_cluster_fps, axis=0)
+                fps = fps[:, bits_to_keep]
+
+            # Perform PCA to reduce to 2D
+            pca = PCA(n_components=2)
+            reduced = pca.fit_transform(fps)
+
+            points = [
+                {
+                    "parent_id": parent_id,
+                    "child_id": child_id,
+                    "kind": kind,
+                    "x": reduced[i, 0] + (np.random.uniform(-0.05, 0.05) if jitter else 0.0),
+                    "y": reduced[i, 1] + (np.random.uniform(-0.05, 0.05) if jitter else 0.0),
+                } for i, (kind, parent_id, child_id) in enumerate(zip(kinds, parent_ids, child_ids))
+            ]
     except Exception as e:
         current_app.logger.error(f"get_embedding_space: error processing items: {e}")
         return jsonify({"error": "Error processing items"}), 500

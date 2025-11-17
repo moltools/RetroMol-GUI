@@ -16,7 +16,7 @@ import VisibilityIcon from "@mui/icons-material/Visibility";
 import { SessionItem } from "../features/session/types";
 import { alpha } from "@mui/material/styles";
 import type { Theme } from "@mui/material/styles";
-import { CoverageBar } from "./CoverageBar";
+import { ScoreBar } from "./ScoreBar";
 
 type WorkspaceItemCardProps = {
   item: SessionItem;
@@ -48,30 +48,17 @@ function formatUpdatedAgo(updatedAt?: number): string {
   return `${diffDays}d ago`;
 }
 
-function getCoverageColor(theme: Theme, value: number): string {
+function getScoreColor(theme: Theme, value: number): string {
   const t = theme.vars || theme;
-
-  if (value < 0.5) {
-    return t.palette.error.main;
-  }
-
-  if (value < 0.9) {
-    return t.palette.warning.main;
-  }
-
+  if (value < 0.5) { return t.palette.error.main };
+  if (value < 0.9) { return t.palette.warning.main };
   return t.palette.success.main;
 }
 
-function getCoverageTooltip(value: number): string {
-  if (value < 0.5) {
-    return "Low coverage: results may be incomplete or noisey"
-  }
-
-  if (value < 0.9) {
-    return "Moderate coverage: results should be fairly reliable"
-  }
-
-  return "High coverage: results are likely very reliable"
+function getScoreTooltip(value: number): string {
+  if (value < 0.5) { return "Low score: results may be incomplete or noisey" };
+  if (value < 0.9) { return "Moderate score: results should be fairly reliable" };
+  return "High score: results are likely very reliable";
 }
 
 export const WorkspaceItemCard: React.FC<WorkspaceItemCardProps> = ({
@@ -143,8 +130,9 @@ export const WorkspaceItemCard: React.FC<WorkspaceItemCardProps> = ({
   }
 
   return (
-    <Box
+    <Stack
       onClick={() => onToggleSelect(item.id)}
+      direction="column"
       sx={(theme) => {
         const t = theme.vars || theme;
         return {
@@ -152,8 +140,6 @@ export const WorkspaceItemCard: React.FC<WorkspaceItemCardProps> = ({
           border: `1px solid ${selected ? t.palette.primary.main : "transparent"}`,
           p: 1.5,
           display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
           gap: 1.5,
           cursor: "pointer",
           "&:hover": { boxShadow: 10 },
@@ -162,140 +148,172 @@ export const WorkspaceItemCard: React.FC<WorkspaceItemCardProps> = ({
         }
       }}
     >
-      <Stack direction="row" spacing={1.5} alignItems="center">
-        <Checkbox
-          size="small"
-          checked={selected}
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleSelect(item.id);
-          }}
-        />
+      <Box
+        sx={(theme) => {
+          const t = theme.vars || theme;
+          return {
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: 1.5,
+          }
+        }}
+      >
+        <Stack direction="row" spacing={1.5} alignItems="center">
+          <Checkbox
+            size="small"
+            checked={selected}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSelect(item.id);
+            }}
+          />
 
-        {isCompound ? (
-          <ScienceIcon fontSize="small" />
-        ) : (
-          <BiotechIcon fontSize="small" />
-        )}
+          {isCompound ? (
+            <ScienceIcon fontSize="small" />
+          ) : (
+            <BiotechIcon fontSize="small" />
+          )}
 
-        <Stack direction="column" spacing={0.5}>
-          <Stack direction="row" spacing={0.5} alignItems="center" width="200px">
-            {isEditing ? (
-              <TextField
-                size="small"
-                variant="standard"
-                value={draftName}
-                autoFocus
-                onClick={(e) => e.stopPropagation()}
-                onChange={(e) => setDraftName(e.target.value)}
-                onKeyDown={handleNameKeyDown}
-                onBlur={commitEditing}
-                inputProps={{
-                  style: { fontSize: "0.875rem", fontWeight: 500 },
-                }}
-              /> 
-            ) : (
-              <>
-                <Typography
-                  variant="body2"
-                  fontWeight={500}
-                  noWrap
-                  sx={{ maxWidth: 220 }}
-                >
-                  {item.name}
-                </Typography>
-                {isDone && (
-                  <EditIcon
-                    onClick={startEditing}
-                    sx={{
-                      fontSize: 16,
-                      cursor: "pointer",
-                      ml: 0.5
-                    }}
-                  />
-                )}
-              </>
-            )}
+          <Stack direction="column" spacing={0.5}>
+            <Stack direction="row" spacing={0.5} alignItems="center" width="200px">
+              {isEditing ? (
+                <TextField
+                  size="small"
+                  variant="standard"
+                  value={draftName}
+                  autoFocus
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => setDraftName(e.target.value)}
+                  onKeyDown={handleNameKeyDown}
+                  onBlur={commitEditing}
+                  inputProps={{
+                    style: { fontSize: "0.875rem", fontWeight: 500 },
+                  }}
+                /> 
+              ) : (
+                <>
+                  <Typography
+                    variant="body2"
+                    fontWeight={500}
+                    noWrap
+                    sx={{ maxWidth: 220 }}
+                  >
+                    {item.name}
+                  </Typography>
+                  {isDone && (
+                    <EditIcon
+                      onClick={startEditing}
+                      sx={{
+                        fontSize: 16,
+                        cursor: "pointer",
+                        ml: 0.5
+                      }}
+                    />
+                  )}
+                </>
+              )}
+            </Stack>
+
+            <Typography variant="caption" color="text.secondary">
+              Status updated {formatUpdatedAgo(item.updatedAt)}
+            </Typography>
           </Stack>
-
-          <Typography variant="caption" color="text.secondary">
-            Status updated {formatUpdatedAgo(item.updatedAt)}
-          </Typography>
-
-          {isDone && isCompound && item.coverage !== undefined && (
-            <CoverageBar
-              coverage={item.coverage ? item.coverage : 0}
-              getTooltipTitle={getCoverageTooltip}
-              getCoverageColor={getCoverageColor}
-              width={150}
-              height={10}
-              tooltipPosition="right"
-            />
-          )}
-
-          {/* Add component for gene clusters that is same height as CoverageBar */}
-          {!isCompound && (
-            <Box sx={{ height: 18 }} />
-          )}
         </Stack>
-      </Stack>
-      
-      <Stack direction="row" spacing={1} alignItems="center">
-        {isQueued && (
-          <Chip
-            label="Queued"
-            color="warning"
-            size="small"
-            sx={{ fontSize: "0.7rem", height: 20 }}
-          />
-        )}
         
-        {showSpinner && (<CircularProgress size={16} thickness={4} />)}
-
-        {isDone && (
-          <Chip
-            label="Ready"
-            color="success"
-            size="small"
-            sx={{ fontSize: "0.7rem", height: 20 }}
-          />
-        )}
-
-        {isError && (
-          <Tooltip
-            title={item.errorMessage || "An unknown error occurred."}
-            placement="left"
-            arrow
-          >
+        <Stack direction="row" spacing={1} alignItems="center">
+          {isQueued && (
             <Chip
-              label="Error"
-              color="error"
+              label="Queued"
+              color="warning"
               size="small"
               sx={{ fontSize: "0.7rem", height: 20 }}
             />
-          </Tooltip>
+          )}
+          
+          {showSpinner && (<CircularProgress size={16} thickness={4} />)}
+
+          {isDone && (
+            <Chip
+              label="Ready"
+              color="success"
+              size="small"
+              sx={{ fontSize: "0.7rem", height: 20 }}
+            />
+          )}
+
+          {isError && (
+            <Tooltip
+              title={item.errorMessage || "An unknown error occurred."}
+              placement="left"
+              arrow
+            >
+              <Chip
+                label="Error"
+                color="error"
+                size="small"
+                sx={{ fontSize: "0.7rem", height: 20 }}
+              />
+            </Tooltip>
+          )}
+
+          <IconButton
+            size="small"
+            onClick={(e) => {
+              e.stopPropagation();
+              onView(item.id);
+            }}
+          >
+            <VisibilityIcon fontSize="small" />
+          </IconButton>
+
+          <IconButton
+            size="small"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(item.id);
+            }}
+          >
+            <DeleteIcon fontSize="small" />
+          </IconButton>
+        </Stack>
+      </Box>
+
+      <Box>
+        {isDone && (
+          <Stack spacing={0.5} sx={{ pl: 8 }}>
+            {item.fingerprints.map((fp, idx) => (
+              <Stack
+                key={fp.id}
+                direction="row"
+                spacing={1}
+                alignItems="center"
+              >
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{
+                    lineHeight: 1,
+                    minWidth: 10,
+                    textAlign: "right",
+                  }}
+                >
+                  {`${idx + 1}`}
+                </Typography>
+                <ScoreBar
+                  key={fp.id}
+                  score={fp.score}
+                  getTooltipTitle={getScoreTooltip}
+                  getScoreColor={getScoreColor}
+                  width={200}
+                  height={10}
+                  tooltipPosition="right"
+                />
+              </Stack>
+            ))}
+          </Stack>
         )}
-
-        <IconButton
-          size="small"
-          onClick={(e) => {
-            e.stopPropagation();
-            onView(item.id);
-          }}
-        >
-          <VisibilityIcon fontSize="small" />
-        </IconButton>
-
-        <IconButton
-          size="small"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete(item.id);
-          }}
-        >
-          <DeleteIcon fontSize="small" />
-        </IconButton>
-      </Stack>
-    </Box>
+      </Box>
+    </Stack>
   )
 }

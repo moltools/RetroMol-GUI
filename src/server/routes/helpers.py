@@ -1,6 +1,16 @@
 """Module providing helper functions for endpoints."""
 
+import uuid
 import numpy as np
+
+
+def get_unique_identifier() -> str:
+    """
+    Generate a unique identifier string.
+    
+    :return: unique identifier as a string
+    """
+    return str(uuid.uuid4())
 
 
 def bits_to_hex(bits: np.ndarray) -> str:

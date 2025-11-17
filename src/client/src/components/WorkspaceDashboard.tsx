@@ -16,7 +16,7 @@ import { PieChart, pieFromSQLResults } from "./PlotPieChart";
 const labelMap: Record<string, string> = {
   "mibig": "MIBiG",
   "npatlas": "NPAtlas",
-};
+}
 
 export const WorkspaceDashboard: React.FC = () => {
   const theme = useTheme();

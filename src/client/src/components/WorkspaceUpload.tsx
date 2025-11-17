@@ -18,7 +18,7 @@ import { Session, SessionItem } from "../features/session/types";
 import { saveSession } from "../features/session/api";
 import { submitCompoundJob, submitGeneClusterJob } from "../features/jobs/api";
 
-const MAX_ITEMS = 20;
+const MAX_ITEMS = 200;
 const MAX_FILE_SIZE_MB = 2;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
@@ -183,6 +183,7 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
         kind: "compound",
         name,
         smiles,
+        fingerprints: [],
         status: "queued",
         errorMessage: null,
         updatedAt: Date.now(),
@@ -339,6 +340,7 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
         kind: "gene_cluster",
         name,
         fileContent,
+        fingerprints: [],
         status: "queued",
         errorMessage: null,
         updatedAt: Date.now(),
@@ -457,7 +459,7 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
             <Button variant="contained" onClick={() => setOpenCompounds(true)}>
               Import compounds
             </Button>
-            <Button variant="contained" onClick={() => setOpenGeneClusters(true)} disabled>
+            <Button variant="contained" onClick={() => setOpenGeneClusters(true)}>
               Import gene clusters
             </Button>
           </Stack>

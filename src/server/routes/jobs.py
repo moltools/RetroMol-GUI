@@ -1,25 +1,41 @@
 """Module for defining job endpoints."""
 
-import hashlib
 import time
+import os
 
 import numpy as np
+import joblib
 from flask import Blueprint, current_app, request, jsonify
 from retromol.api import run_retromol
 from retromol.fingerprint import (
     FingerprintGenerator,
     NameSimilarityConfig,
-    polyketide_family_of
+    polyketide_family_of,
+    polyketide_ancestors_of,
 )
 from retromol.io import Input as RetroMolInput
 from retromol.rules import get_path_default_matching_rules
+from biocracker.antismash import parse_region_gbk_file
 
-from routes.helpers import bits_to_hex
+from routes.helpers import bits_to_hex, get_unique_identifier
 from routes.session_store import load_session_with_items, update_item
-
+from biocracker.readout import NRPSModuleReadout, PKSModuleReadout, linear_readouts
+from biocracker.text_mining import get_default_tokenspecs, mine_virtual_tokens
 
 blp_submit_compound = Blueprint("submit_compound", __name__)
 blp_submit_gene_cluster = Blueprint("submit_gene_cluster", __name__)
+
+
+CACHE_DIR = os.environ.get("CACHE_DIR", "/app/cache")
+
+# Make sure cache directory exists
+os.makedirs(CACHE_DIR, exist_ok=True)
+
+
+COLLAPSE_BY_NAME = {
+    "glycosylation": ["glycosyltransferase"],
+    "methylation": ["methyltransferase"],
+}
 
 
 def _set_item_status_inplace(item: dict, status: str, error_message: str | None = None) -> None:
@@ -47,8 +63,14 @@ def _setup_fingerprint_generator() -> FingerprintGenerator:
     :return: FingerprintGenerator instance
     """
     path_default_matching_rules = get_path_default_matching_rules()
-    collapse_by_name = ["glycosylation", "methylation"]
-    cfg = NameSimilarityConfig(family_of=polyketide_family_of, symmetric=True, family_repeat_scale=1)
+    collapse_by_name: list[str] = list(COLLAPSE_BY_NAME.keys())
+    cfg = NameSimilarityConfig(
+        # family_of=polyketide_family_of,
+        # family_repeat_scale=1,
+        ancestors_of=polyketide_ancestors_of,
+        ancestor_repeat_scale=1,
+        symmetric=True,
+    )
     generator = FingerprintGenerator(
         matching_rules_yaml=path_default_matching_rules,
         collapse_by_name=collapse_by_name,
@@ -57,33 +79,114 @@ def _setup_fingerprint_generator() -> FingerprintGenerator:
     return generator
 
 
-def _compute_fingerprint_512_compound(generator: FingerprintGenerator, smiles: str) -> tuple[float, str]:
+def _compute_fingerprint_512_compound(generator: FingerprintGenerator, smiles: str) -> tuple[list[float], list[str]]:
     """
     Compute 512-bit fingerprint for a compound given its SMILES.
 
     :param generator: the fingerprint generator instance
     :param smiles: the SMILES string of the compound
-    :return: tuple of (coverage, list of fingerprint hex strings)
+    :return: tuple of (list of coverage values, list of fingerprint hex strings)
     """
+    # Parse compound with RetroMol
     input_data = RetroMolInput(cid="compound", repr=smiles)
     result = run_retromol(input_data)
+
+    # Calculate coverage
     cov = result.best_total_coverage()
+
+    # Generate fingerprints
     fps: np.ndarray = generator.fingerprint_from_result(result, num_bits=512, counted=False) # shape [N, 512] where N>=1
-    fp: np.ndarray = fps[0] if len(fps) > 0 else np.zeros((512,), dtype=bool)
-    fp_hex_string = bits_to_hex(fp)
-    return cov, fp_hex_string
+
+    # Convert fingerprints to hex strings
+    fp_hex_strings = [bits_to_hex(fp) for fp in fps] if len(fps) > 0 else [np.zeros((512,), dtype=bool)]
+
+    return [cov for _ in range(len(fp_hex_strings))], fp_hex_strings
 
 
-def _compute_fingerprint_512_gene_cluster() -> str:
+def _compute_fingerprint_512_gene_cluster(generator: FingerprintGenerator, itemId: str, gbk_str: str) -> tuple[list[float], list[str]]:
     """
     Dummy function to compute a 512-bit fingerprint as a hex string (128 chars).
 
-    :return: a dummy fingerprint string
+    :param generator: the fingerprint generator instance
+    :param itemId: the ID of the gene cluster item
+    :param gbk_str: the GenBank file content as a string
+    :return: tuple of (list of average prediction values, list of fingerprint hex strings)
     """
-    random_string = str(time.time())
-    h = hashlib.sha512(random_string.encode("utf-8")).hexdigest()
-    assert len(h) == 128, "Fingerprint length mismatch"
-    return h
+    # Write gbk_str to a temporary file
+    # gbk_path = os.path.join(CACHE_DIR, f"temp_{itemId}_{int(time.time() * 1000)}.gbk")
+    gbk_path = os.path.join(CACHE_DIR, f"temp.gbk")
+    with open(gbk_path, "w") as f:
+        f.write(gbk_str)
+
+    # Configure tokenspecs
+    tokenspecs = get_default_tokenspecs()
+
+    # Parse gene cluster file
+    targets = parse_region_gbk_file(gbk_path, top_level="cand_cluster")  # 'region' or 'cand_cluster' top level
+
+    # Generate readouts
+    level = "gene"  # 'rec' or 'gene' level
+    avg_pred_vals, fps = [], []
+    for target in targets:
+        pred_vals = []
+        kmers = []
+
+        # Mine for tokenspecs (i.e., family tokens)
+        for mined_tokenspec in mine_virtual_tokens(target, tokenspecs):
+            if token_spec := mined_tokenspec.get("token"):
+                for token_name, values in COLLAPSE_BY_NAME.items():
+                    if token_spec in values:
+                        kmers.append([(token_name, None)])
+
+        # Extract module kmers
+        for readout in linear_readouts(
+            target,
+            cache_dir_override=CACHE_DIR,
+            level=level,
+            pred_threshold=0.1
+        ):
+            kmer = []
+            for module in readout["readout"]:
+                match module:
+                    case PKSModuleReadout(module_type="PKS_A") as m:
+                        kmer.append(("A", None))
+                        pred_vals.append(1.0)
+                    case PKSModuleReadout(module_type="PKS_B") as m:
+                        kmer.append(("B", None))
+                        pred_vals.append(1.0)
+                    case PKSModuleReadout(module_type="PKS_C") as m:
+                        kmer.append(("C", None))
+                        pred_vals.append(1.0)
+                    case PKSModuleReadout(module_type="PKS_D") as m:
+                        kmer.append(("D", None))
+                        pred_vals.append(1.0)
+                    case NRPSModuleReadout() as m:
+                        substrate_name = m.get("substrate_name", None)
+                        substrate_smiles = m.get("substrate_smiles", None)
+                        substrate_score = m.get("score", 0.0)
+                        kmer.append((substrate_name, substrate_smiles))
+                        pred_vals.append(substrate_score)
+                    case _: raise ValueError("Unknown module readout type")
+
+            if len(kmer) > 0:
+                kmers.append(kmer)
+
+        # Generate fingerprint
+        fp: np.ndarray = generator.fingerprint_from_kmers(kmers, num_bits=512, counted=False)
+
+        # Convert to hex string
+        fp_hex_string = bits_to_hex(fp)
+
+        # Calculate average prediction value
+        avg_pred_val = float(np.mean(pred_vals)) if len(pred_vals) > 0 else 0.0
+        
+        avg_pred_vals.append(avg_pred_val)
+        fps.append(fp_hex_string)
+
+    # Clean up temporary file
+    os.remove(gbk_path)
+
+    return avg_pred_vals, fps
 
 
 @blp_submit_compound.post("/api/submitCompound")
@@ -148,14 +251,20 @@ def submit_compound() -> tuple[dict[str, str], int]:
     try:
         # Heavy work
         generator = _setup_fingerprint_generator()
-        coverage, fp_hex_string = _compute_fingerprint_512_compound(generator, smiles)
+        coverages, fp_hex_strings = _compute_fingerprint_512_compound(generator, smiles)
 
         # Set final status=done and store results on this item only
         def mark_done(it: dict) -> None:
             it["name"] = name or it.get("name")
             it["smiles"] = smiles or it.get("smiles")
-            it["fingerprint512"] = fp_hex_string
-            it["coverage"] = coverage
+            it["fingerprints"] = [
+                {
+                    "id": get_unique_identifier(),
+                    "fingerprint512": fp_hex,
+                    "score": cov,
+                }
+                for cov, fp_hex in zip(coverages, fp_hex_strings, strict=True)
+            ]
             _set_item_status_inplace(it, "done")
 
         update_item(session_id, item_id, mark_done)
@@ -247,13 +356,21 @@ def submit_gene_cluster()  -> tuple[dict[str, str], int]:
 
     try:
         # Heavy work
-        fp_hex_string = _compute_fingerprint_512_gene_cluster()
+        generator = _setup_fingerprint_generator()
+        scores, fp_hex_strings = _compute_fingerprint_512_gene_cluster(generator, item_id, file_content)
         
         # Set final status=done and store results on this item only
         def mark_done(it: dict) -> None:
             it["name"] = name or it.get("name")
             it["fileContent"] = file_content or it.get("fileContent")
-            it["fingerprint512"] = fp_hex_string
+            it["fingerprints"] = [
+                {
+                    "id": get_unique_identifier(),
+                    "fingerprint512": fp_hex,
+                    "score": score,
+                }
+                for idx, (score, fp_hex) in enumerate(zip(scores, fp_hex_strings, strict=True), start=1)
+            ]
             _set_item_status_inplace(it, "done")
 
         update_item(session_id, item_id, mark_done)

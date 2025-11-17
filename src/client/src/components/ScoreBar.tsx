@@ -3,27 +3,26 @@ import Box from "@mui/material/Box";
 import Stack from "@mui/material/Stack";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
-import { alpha, useTheme } from "@mui/material/styles";
+import { alpha } from "@mui/material/styles";
 
-type CoverageBarProps = {
-  coverage: number; // value between 0 and 1
+type ScoreBarProps = {
+  score: number; // value between 0 and 1
   getTooltipTitle: (value: number) => string;
-  getCoverageColor: (theme: any, value: number) => string;
+  getScoreColor: (theme: any, value: number) => string;
   tooltipPosition?: "top" | "bottom" | "left" | "right";
   width?: number | string;
   height?: number | string;
 }
 
-export const CoverageBar: React.FC<CoverageBarProps> = ({
-  coverage,
+export const ScoreBar: React.FC<ScoreBarProps> = ({
+  score,
   getTooltipTitle,
-  getCoverageColor,
+  getScoreColor,
   tooltipPosition = "top",
   width = "100%",
   height = 16
 }) => {
-  const theme = useTheme();
-  const value = Math.max(0, Math.min(1, coverage));
+  const value = Math.max(0, Math.min(1, score));
 
   return (
     <Box sx={{ mt: 0.5 }}>
@@ -33,9 +32,9 @@ export const CoverageBar: React.FC<CoverageBarProps> = ({
             sx={(theme) => {
               const t = theme.vars || theme;
               return {
-                flexGrow: 1,
                 height: height,
                 width: width,
+                flexShrink: 0,
                 borderRadius: 999,
                 overflow: "hidden",
                 backgroundColor: alpha("#000000", 0.1),
@@ -45,7 +44,7 @@ export const CoverageBar: React.FC<CoverageBarProps> = ({
             <Box
               sx={(theme) => {
                 const t = theme.vars || theme;
-                const barColor = getCoverageColor(t, value);
+                const barColor = getScoreColor(t, value);
                 return {
                   width: `${value * 100}%`,
                   height: "100%",

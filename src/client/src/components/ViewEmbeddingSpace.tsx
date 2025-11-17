@@ -6,9 +6,14 @@ import Typography from "@mui/material/Typography";
 import CircularProgress from "@mui/material/CircularProgress";
 import { ScatterChart } from "@mui/x-charts/ScatterChart";
 import { useNotifications } from "../components/NotificationProvider";
-import { Session } from "../features/session/types";
+import { Session, SessionItem } from "../features/session/types";
 import { EmbeddingPoint } from "../features/views/types";
 import { getEmbeddingSpace } from "../features/views/api";
+
+const labelMap: Record<string, string> = {
+  "compound": "Compound",
+  "gene_cluster": "Biosynthetic gene cluster",
+}
 
 interface ViewEmbeddingSpaceProps {
   session: Session;
@@ -27,13 +32,55 @@ export const ViewEmbeddingSpace: React.FC<ViewEmbeddingSpaceProps> = ({
   const [error, setError] = React.useState<string | null>(null);
 
   // Map item ID -> name for tooltips/labels
-  const idToName = React.useMemo(() => {
-    const map = new Map<string, string>();
+  const parentById = React.useMemo(() => {
+    const map = new Map<string, SessionItem>();
     for (const item of session.items) {
-      map.set(item.id, item.name);
+      map.set(item.id, item);
     }
     return map;
   }, [session.items]);
+
+  // Map child ID -> score for tooltips
+  const scoreByChildId = React.useMemo(() => {
+    const map = new Map<string, number>();
+    for (const item of session.items) {
+      for (const fp of item.fingerprints || []) {
+        map.set(fp.id, fp.score);
+      }
+    }
+    return map;
+  }, [session.items]);
+
+  // Construct scatter series from points
+  const scatterSeries = React.useMemo(() => {
+    if (!points) return [];
+
+    // kind -> array of points for that kin
+    const byKind = new Map<string, { label: string; data: { x: number; y: number; id: string; name: string }[] }>();
+
+    for (const p of points) {
+      const parent = parentById.get(p.parent_id) ?? null;
+      const parentName = parent ? parent.name : "unknown";
+      const childIds = parent?.fingerprints.map((fp) => fp.id) || [];
+      const childIdx = childIds.indexOf(p.child_id);
+      const key = p.kind || "unknown";
+
+      // Initialize kind entry if not present
+      if (!byKind.has(key)) {
+        byKind.set(key, { label: key, data: [] });
+      }
+
+      // Add point to appropriate kind series
+      byKind.get(key)!.data.push({
+        x: p.x,
+        y: p.y,
+        id: p.child_id,
+        name: `Readout ${childIdx >= 0 ? `${childIdx + 1}` : ""} ${parentName} `,
+      });
+    }
+
+    return Array.from(byKind.values());
+  }, [points, parentById]);
 
   // Changes only when the contents of items changes, not just because of polling
   const itemsKey = React.useMemo(() => {
@@ -130,22 +177,18 @@ export const ViewEmbeddingSpace: React.FC<ViewEmbeddingSpaceProps> = ({
           <Box sx={{ flex: 1, minHeight: 0 }}>
             <ScatterChart
               height={360}
-              series={[
-                {
-                  label: "Items",
-                  data: points.map((p) => ({
-                    x: p.x,
-                    y: p.y,
-                    id: p.id,
-                    name: idToName.get(p.id) ?? p.id,
-                  })),
-                  valueFormatter: (_value, context) => {
-                    const idx = context.dataIndex;
-                    const point = points[idx];
-                    return idToName.get(point.id) ?? point.id;
-                  }
+              series={scatterSeries.map((group) => ({
+                label: labelMap[group.label] || group.label,
+                data: group.data,
+                valueFormatter: (_value, context) => {
+                  const idx = context.dataIndex;
+                  const point = group.data[idx];
+                  const score = scoreByChildId.get(point.id);
+                  return score != null
+                    ? `${point.name} (score ${(score * 100).toFixed(1)}%)`
+                    : point.name;
                 }
-              ]}
+              }))}
               xAxis={[{ disableLine: true, disableTicks: true }]}
               yAxis={[{ disableLine: true, disableTicks: true }]}
               grid={{ horizontal: false, vertical: false }}
