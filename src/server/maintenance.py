@@ -22,8 +22,8 @@ def main() -> None:
     while True:
         try:
             updated = mark_stale_processing_items()
-            # if updated:
-            logger.info(f"Marked {updated} stale processing items as timeout error")
+            if updated:
+                logger.info(f"Marked {updated} stale processing items as timeout error")
         except Exception as e:
             logger.exception(f"Error during maintenance loop: {e}")
         time.sleep(INTERVAL_SECONDS)

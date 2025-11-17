@@ -2,6 +2,7 @@ services:
   db:
     image: pgvector/pgvector:pg16
     container_name: retromol_db
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_SUPERUSER}
@@ -24,6 +25,7 @@ services:
   redis:
     image: redis:7
     container_name: retromol_redis
+    restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
     # No ports: exposed only inside the Docker network
     networks: [ retromol_network ]
@@ -33,6 +35,7 @@ services:
       context: .
       dockerfile: ./docker/backend.Dockerfile
     container_name: retromol_maintenance
+    restart: unless-stopped
     env_file:
       - ./docker/backend.env
     depends_on:
@@ -46,6 +49,7 @@ services:
       context: .
       dockerfile: ./docker/backend.Dockerfile
     container_name: retromol_backend
+    restart: unless-stopped
     env_file:
       - ./docker/backend.env
     depends_on:
@@ -60,6 +64,7 @@ services:
       context: .
       dockerfile: ./docker/web.Dockerfile
     container_name: retromol_web
+    restart: unless-stopped
     depends_on:
       - backend
     ports:
