@@ -17,7 +17,6 @@ const labelMap: Record<string, string> = {
 
 interface ViewEmbeddingSpaceProps {
   session: Session;
-  // Updated to functional form to avoid stale closures
   setSession: (updated: (prev: Session) => Session) => void;
 }
 
@@ -91,22 +90,26 @@ export const ViewEmbeddingSpace: React.FC<ViewEmbeddingSpaceProps> = ({
       .join("|")
   }, [session.items]);
 
+  // Filtered items with fingerprints
+  const itemsWithFingerprints = React.useMemo(() => {
+    return session.items?.filter((item) => item.fingerprints && item.fingerprints.length > 0) || [];
+  }, [session.items]);
+
   // Fetch embedding space points when session changes
   React.useEffect(() => {
-    // No items: nothing to embed
-    if (!session.items || session.items.length === 0) {
+    // If less than 2 items, no embedding space
+    if (!itemsWithFingerprints || itemsWithFingerprints.length < 2) {
       setPoints(null);
       setLoading(false);
-      setError(null);
+      setError(`At least two readouts are required to view the embedding space.`);
       return;
     }
 
     let cancelled = false;
 
     setLoading(true);
-    setError(null);
 
-    getEmbeddingSpace(session)
+    getEmbeddingSpace(session.sessionId, itemsWithFingerprints)
       .then((pts) => {
         if (cancelled) return;
         setPoints(pts);
@@ -125,10 +128,10 @@ export const ViewEmbeddingSpace: React.FC<ViewEmbeddingSpaceProps> = ({
     return () => {
       cancelled = true;
     }
-  }, [itemsKey, pushNotification]); // only rerun when itemsKey changes (i.e., notable changes to session items)
+  }, [itemsWithFingerprints, pushNotification]); // only rerun when itemsKey changes (i.e., notable changes to session items)
 
   // No items at all
-  if (!session.items || session.items.length === 0) {
+  if (!itemsWithFingerprints || itemsWithFingerprints.length === 0) {
     return (
       <Box>
         <Typography variant="body2">
@@ -155,8 +158,8 @@ export const ViewEmbeddingSpace: React.FC<ViewEmbeddingSpaceProps> = ({
       )}
 
       {/* Error message if fetch failed */}
-      {error && !loading && (
-        <Box sx={{ mb: 2 }}>
+      {error && (
+        <Box>
           <Alert severity="error">
             {error}
           </Alert>

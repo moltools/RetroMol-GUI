@@ -5,7 +5,6 @@ import { Session } from "../features/session/types";
 
 interface ViewMsaProps {
   session: Session;
-  // Updated to functional form to avoid stale closures
   setSession: (updated: (prev: Session) => Session) => void;
 }
 
