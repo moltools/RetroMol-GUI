@@ -14,6 +14,7 @@ import { WorkspaceHeader } from "./WorkspaceHeader";
 import { WorkspaceDashboard } from "./WorkspaceDashboard";
 import { WorkspaceUpload } from "./WorkspaceUpload";
 import { WorkspaceExplore } from "./WorkspaceExplore";
+import { WorkspaceQuery } from "./WorkspaceQuery";
 
 export const Workspace: React.FC = () => {
   const { showOverlay, hideOverlay } = useOverlay();
@@ -137,6 +138,7 @@ export const Workspace: React.FC = () => {
                   <Route index element={<WorkspaceDashboard />} />
                   <Route path="upload" element={<WorkspaceUpload session={session} setSession={setSessionLocal} />} />
                   <Route path="explore" element={<WorkspaceExplore session={session} setSession={setSessionLocal} />} />
+                  <Route path="query" element={<WorkspaceQuery session={session} setSession={setSessionLocal} />} />
                 </Routes>
               </Box>
             </Fade>

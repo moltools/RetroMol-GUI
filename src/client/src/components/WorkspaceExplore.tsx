@@ -6,7 +6,7 @@ import MuiLink from "@mui/material/Link";
 import Typography from "@mui/material/Typography";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
-import NotificationsRoundedIcon from '@mui/icons-material/NotificationsRounded';
+import NotificationsRoundedIcon from "@mui/icons-material/NotificationsRounded";
 import { useTheme } from "@mui/material/styles";
 import { Link as RouterLink } from "react-router-dom";
 import { Session } from "../features/session/types";
@@ -15,7 +15,6 @@ import { ViewMsa } from "./ViewMsa";
 
 type WorkspaceExploreProps = {
   session: Session;
-  // Updated to functional form to avoid stale closures
   setSession: (updated: (prev: Session) => Session) => void;
 }
 
@@ -63,7 +62,20 @@ export const WorkspaceExplore: React.FC<WorkspaceExploreProps> = ({ session, set
             >
               Upload tab
             </MuiLink>&nbsp;
-            marked as <b>Ready</b> can used here for analysis. Biosynthetic fingerprints parsed from your imports can be visualized in a reduced dimensional space and individual clusters can be enriched for annotations. Keep an eye on <NotificationsRoundedIcon fontSize={'small'} sx={{ verticalAlign: 'middle' }} /> for updates on your queries.
+            marked as <b>Ready</b> can used here for analysis. Biosynthetic fingerprints parsed from your imports can be
+            visualized in a reduced dimensional space and individual clusters can be enriched for annotations. You can
+            enrich your data further by querying any item against the BioNexus database in the&nbsp;
+            <MuiLink
+              component={RouterLink}
+              to="/dashboard/query"
+              underline="hover"
+              color={(theme.vars || theme).palette.primary.main}
+              sx={{ fontWeight: "500" }}
+            >
+              Query tab
+            </MuiLink>&nbsp;and importing additional hits into your workspace. Keep an eye on&nbsp;
+            <NotificationsRoundedIcon fontSize={"small"} sx={{ verticalAlign: "middle" }} /> for updates on your
+            imports.
           </Typography>
         </CardContent>
       </Card>

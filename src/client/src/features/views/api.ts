@@ -1,13 +1,13 @@
 import { postJson } from "../http";
-import { Session } from "../session/types";
+import { SessionItem } from "../session/types";
 import { EmbeddingPoint, GetEmbeddingSpaceRespSchema } from "./types";
 
-export async function getEmbeddingSpace(session: Session): Promise<EmbeddingPoint[]> {
+export async function getEmbeddingSpace(sessionId: string, sessionItems: SessionItem[]): Promise<EmbeddingPoint[]> {
   const data = await postJson(
     "/api/getEmbeddingSpace",
     {
-      sessionId: session.sessionId,
-      items: session.items,
+      sessionId: sessionId,
+      items: sessionItems,
     },
     GetEmbeddingSpaceRespSchema
   )

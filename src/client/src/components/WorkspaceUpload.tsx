@@ -24,7 +24,6 @@ const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
 type WorkspaceUploadProps = {
   session: Session;
-  // Updated to functional form to avoid stale closures
   setSession: (updated: (prev: Session) => Session) => void;
 }
 
