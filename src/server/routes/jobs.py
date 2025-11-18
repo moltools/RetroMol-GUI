@@ -4,7 +4,6 @@ import time
 import os
 
 import numpy as np
-import joblib
 from flask import Blueprint, current_app, request, jsonify
 from retromol.api import run_retromol
 from retromol.fingerprint import (
@@ -18,18 +17,13 @@ from retromol.rules import get_path_default_matching_rules
 from biocracker.antismash import parse_region_gbk_file
 
 from routes.helpers import bits_to_hex, get_unique_identifier
+from routes.models_registry import get_cache_dir, get_paras_model
 from routes.session_store import load_session_with_items, update_item
 from biocracker.readout import NRPSModuleReadout, PKSModuleReadout, linear_readouts
 from biocracker.text_mining import get_default_tokenspecs, mine_virtual_tokens
 
 blp_submit_compound = Blueprint("submit_compound", __name__)
 blp_submit_gene_cluster = Blueprint("submit_gene_cluster", __name__)
-
-
-CACHE_DIR = os.environ.get("CACHE_DIR", "/app/cache")
-
-# Make sure cache directory exists
-os.makedirs(CACHE_DIR, exist_ok=True)
 
 
 COLLAPSE_BY_NAME = {
@@ -113,8 +107,7 @@ def _compute_fingerprint_512_gene_cluster(generator: FingerprintGenerator, itemI
     :return: tuple of (list of average prediction values, list of fingerprint hex strings)
     """
     # Write gbk_str to a temporary file
-    # gbk_path = os.path.join(CACHE_DIR, f"temp_{itemId}_{int(time.time() * 1000)}.gbk")
-    gbk_path = os.path.join(CACHE_DIR, f"temp.gbk")
+    gbk_path = os.path.join(get_cache_dir(), f"temp.gbk")
     with open(gbk_path, "w") as f:
         f.write(gbk_str)
 
@@ -138,10 +131,14 @@ def _compute_fingerprint_512_gene_cluster(generator: FingerprintGenerator, itemI
                     if token_spec in values:
                         kmers.append([(token_name, None)])
 
+        # Optionally load PARAS model
+        paras_model = get_paras_model()
+
         # Extract module kmers
         for readout in linear_readouts(
             target,
-            cache_dir_override=CACHE_DIR,
+            model=paras_model,
+            cache_dir_override=get_cache_dir(),
             level=level,
             pred_threshold=0.1
         ):

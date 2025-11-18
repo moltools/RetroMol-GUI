@@ -96,9 +96,9 @@ curl -i http://localhost:4005/api/ready  # should return 200 OK (DB connection O
 
 You can develop with hot-reloading for both backend and frontend, while still using the database from Docker.
 
-### Start only the database (in Docker)
+### Start only the database and Redis (in Docker)
 
-Expose Postgres to your host for local development:
+Expose Postgres and Redis to your host for local development:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db redis
@@ -121,12 +121,17 @@ port: 6379
 
 ### Run the backend locally
 
-First create a virtual environment and install backend dependencies listed in  `src/server/requirements.txt`.
+First create a virtual environment and install backend dependencies:
+
+```bash
+CONDA_SUBDIR=osx-64 conda env create -f ./src/server/environment.backend.dev.yml 
+conda activate retromol-gui
+```
 
 Then, run the helper script:
 
 ```bash
-./scripts/dev_backend.sh
+bash ./scripts/dev_backend.sh
 ```
 
 This script:

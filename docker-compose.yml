@@ -33,7 +33,7 @@ services:
   maintenance:
     build:
       context: .
-      dockerfile: ./docker/backend.Dockerfile
+      dockerfile: ./docker/maintenance.Dockerfile
     container_name: retromol_maintenance
     restart: unless-stopped
     env_file:
@@ -41,7 +41,6 @@ services:
     depends_on:
       redis:
         condition: service_started
-    command: ["python", "-m", "maintenance"]
     networks: [ retromol_network ]
 
   backend:
@@ -52,6 +51,10 @@ services:
     restart: unless-stopped
     env_file:
       - ./docker/backend.env
+    environment:
+      PARAS_MODEL_PATH: ${PARAS_MODEL_PATH}
+    volumes:
+      - ${PARAS_MODEL_HOST_PATH}:${PARAS_MODEL_PATH}:ro
     depends_on:
       db:
         condition: service_healthy

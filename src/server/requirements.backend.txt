@@ -2,7 +2,6 @@ python-dotenv
 flask
 gunicorn
 joblib
-apscheduler
 psycopg[binary]
 redis>=5.0
 retromol==1.1.0
