@@ -1,7 +1,7 @@
 """Module for defining job endpoints."""
 
+import tempfile
 import time
-import os
 
 import numpy as np
 from flask import Blueprint, current_app, request, jsonify
@@ -107,15 +107,16 @@ def _compute_fingerprint_512_gene_cluster(generator: FingerprintGenerator, itemI
     :return: tuple of (list of average prediction values, list of fingerprint hex strings)
     """
     # Write gbk_str to a temporary file
-    gbk_path = os.path.join(get_cache_dir(), f"temp.gbk")
-    with open(gbk_path, "w") as f:
-        f.write(gbk_str)
+    with tempfile.NamedTemporaryFile(delete=True, suffix=".gbk") as temp_gbk_file:
+        temp_gbk_file.write(gbk_str.encode("utf-8"))
+        temp_gbk_file.flush()
+        gbk_path = temp_gbk_file.name
 
-    # Configure tokenspecs
-    tokenspecs = get_default_tokenspecs()
+        # Configure tokenspecs
+        tokenspecs = get_default_tokenspecs()
 
-    # Parse gene cluster file
-    targets = parse_region_gbk_file(gbk_path, top_level="cand_cluster")  # 'region' or 'cand_cluster' top level
+        # Parse gene cluster file
+        targets = parse_region_gbk_file(gbk_path, top_level="cand_cluster")  # 'region' or 'cand_cluster' top level
 
     # Generate readouts
     level = "gene"  # 'rec' or 'gene' level
@@ -179,9 +180,6 @@ def _compute_fingerprint_512_gene_cluster(generator: FingerprintGenerator, itemI
         
         avg_pred_vals.append(avg_pred_val)
         fps.append(fp_hex_string)
-
-    # Clean up temporary file
-    os.remove(gbk_path)
 
     return avg_pred_vals, fps
 
