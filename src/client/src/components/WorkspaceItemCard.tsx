@@ -294,11 +294,11 @@ export const WorkspaceItemCard: React.FC<WorkspaceItemCardProps> = ({
                   color="text.secondary"
                   sx={{
                     lineHeight: 1,
-                    minWidth: 10,
-                    textAlign: "right",
+                    minWidth: 60,
+                    textAlign: "left",
                   }}
                 >
-                  {`${idx + 1}`}
+                  {`Readout ${idx + 1}`}
                 </Typography>
                 <ScoreBar
                   key={fp.id}

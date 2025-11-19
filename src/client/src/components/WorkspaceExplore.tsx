@@ -2,6 +2,7 @@ import React from "react";
 import Box from "@mui/material/Box";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
+import Grid from "@mui/material/Grid";
 import MuiLink from "@mui/material/Link";
 import Typography from "@mui/material/Typography";
 import Tabs from "@mui/material/Tabs";
@@ -79,68 +80,78 @@ export const WorkspaceExplore: React.FC<WorkspaceExploreProps> = ({ session, set
           </Typography>
         </CardContent>
       </Card>
-
-      <Card
-        variant="outlined"
-        sx={{
-          display: "flex",
-          flexDirection: "column",
-          flexGrow: 1,
-        }}
-      >
-        <CardContent sx={{ pt: 1.5 }}>
-          <Tabs
-            value={view}
-            onChange={handleViewChange}
-            aria-label="Explore views"
+      <Grid container spacing={2} columns={12} alignItems="stretch" sx={{ mb: (theme) => theme.spacing(2) }}>
+        <Grid size={{ xs: 12, md: 6 }} sx={{ display: "flex" }}>
+          <Card
+            variant="outlined"
             sx={{
-              borderBottom: 1,
-              borderColor: "divider",
-              mb: 2,
-              minHeight: 0,
-              "& .MuiTab-root": {
-                minHeight: 0,
-                textTransform: "none",
-                fontSize: 14,
-              },
+              display: "flex",
+              flexDirection: "column",
+              flexGrow: 1,
             }}
           >
-            <Tab
-              label="Embedding space"
-              value="embedding"
-              id="explore-tab-embedding"
-              aria-controls="explore-tabpanel-embedding"
-            />
-            <Tab
-              label="MSA"
-              value="msa"
-              id="explore-tab-msa"
-              aria-controls="explore-tabpanel-msa"
-            />
-          </Tabs>
+            <CardContent sx={{ pt: 1.5 }}>
+              <Tabs
+                value={view}
+                onChange={handleViewChange}
+                aria-label="Explore views"
+                sx={{
+                  borderBottom: 1,
+                  borderColor: "divider",
+                  mb: 2,
+                  minHeight: 0,
+                  "& .MuiTab-root": {
+                    minHeight: 0,
+                    textTransform: "none",
+                    fontSize: 14,
+                  },
+                }}
+              >
+                <Tab
+                  label="Embedding space"
+                  value="embedding"
+                  id="explore-tab-embedding"
+                  aria-controls="explore-tabpanel-embedding"
+                />
+                <Tab
+                  label="MSA"
+                  value="msa"
+                  id="explore-tab-msa"
+                  aria-controls="explore-tabpanel-msa"
+                />
+              </Tabs>
 
-          <Box>
-            <Box
-              role="tabpanel"
-              id="explore-tabpanel-embedding"
-              aria-labelledby="explore-tab-embedding"
-              sx={{ display: view === "embedding" ? "block" : "none" }}
-            >
-              <ViewEmbeddingSpace session={session} setSession={setSession} />
-            </Box>
-          </Box>
-          <Box>
-            <Box
-              role="tabpanel"
-              id="explore-tabpanel-msa"
-              aria-labelledby="explore-tab-msa"
-              sx={{ display: view === "msa" ? "block" : "none" }}
-            >
-              <ViewMsa session={session} setSession={setSession} />
-            </Box>
-          </Box>
-        </CardContent>
-      </Card>
+              <Box>
+                <Box
+                  role="tabpanel"
+                  id="explore-tabpanel-embedding"
+                  aria-labelledby="explore-tab-embedding"
+                  sx={{ display: view === "embedding" ? "block" : "none" }}
+                >
+                  <ViewEmbeddingSpace session={session} setSession={setSession} />
+                </Box>
+              </Box>
+              <Box>
+                <Box
+                  role="tabpanel"
+                  id="explore-tabpanel-msa"
+                  aria-labelledby="explore-tab-msa"
+                  sx={{ display: view === "msa" ? "block" : "none" }}
+                >
+                  <ViewMsa session={session} setSession={setSession} />
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid size={{ xs: 12, md: 6 }} sx={{ display: "flex" }}>
+          <Card variant="outlined" sx={{ display: "flex", "flexDirection": "column", flex: 1 }}>
+            <CardContent>
+              {/* */}
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
     </Box>
   )
 }

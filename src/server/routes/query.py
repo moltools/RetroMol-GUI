@@ -3,10 +3,13 @@
 import os
 import time
 
-from flask import Blueprint, request, jsonify
-
 import psycopg
+from flask import Blueprint, request, jsonify
 from psycopg import sql
+from pgvector import Vector
+from pgvector.psycopg import register_vector
+
+from routes.helpers import hex_to_bits
 
 
 blp = Blueprint("query", __name__)
@@ -34,6 +37,21 @@ def dsn_from_env() -> str:
     user = os.getenv("DB_USER", "app_ro")
     pwd = os.getenv("DB_PASS") or os.getenv("DB_PASSWORD", "apppass_ro")
     return f"postgresql://{user}:{pwd}@{host}:{port}/{name}"
+
+
+def preprocess_cross_modal_params(typed: dict) -> dict:
+    """
+    Preprocess parameters for the cross-modal retrieval query.
+
+    :param typed: the typed parameters dictionary
+    :return: the preprocessed parameters dictionary
+    """
+    fp_hex_string = typed["fingerprint512"]
+    fp = hex_to_bits(fp_hex_string)
+    fp = [float(x) for x in fp]
+    typed["qv"] = Vector(fp)
+
+    return typed
 
 
 QUERIES = {
@@ -85,6 +103,35 @@ QUERIES = {
         "default_order_dir": "ASC",
         "required": {"q": str},
         "optional": {},
+    },
+    "cross_modal_retrieval": {
+        "sql": """
+            SELECT
+                rf.id AS identifier,
+                cr.source AS source,
+                cr.ext_id AS ext_id,
+                cr.name AS name,
+                ROUND(
+                    ((1.0 - (rf.fp_retro_b512_vec_binary <=> %(qv)s)) * 100)::numeric,
+                    2
+                ) AS score
+            FROM retrofingerprint AS rf
+            JOIN retromol_compound rmc
+            ON rmc.id = rf.retromol_compound_id
+            JOIN compound c
+            ON c.id = rmc.compound_id
+            LEFT join compound_record cr
+            ON cr.compound_id = c.id
+            WHERE vector_norm(rf.fp_retro_b512_vec_binary) > 0
+            AND vector_norm(%(qv)s) > 0
+            ORDER BY {order_col} {order_dir}
+        """,
+        "allowed_order_cols": {"identifier", "name", "source", "ext_id", "score"},
+        "default_order_col": "score",
+        "default_order_dir": "DESC",
+        "required": { "fingerprint512": str },
+        "optional": {},
+        "preprocess_params": preprocess_cross_modal_params,
     }
 }
 
@@ -146,6 +193,14 @@ def run_query():
             except Exception:
                 return jsonify({"error": f"Invalid type for {k}"}), 400
             
+    # Preprocess params for specific queries
+    preprocess = qinfo.get("preprocess_params")
+    if preprocess:
+        try:
+            typed = preprocess(typed) or typed
+        except Exception as e:
+            return jsonify({"error": f"Parameter preprocessing error: {str(e)}"}), 400
+            
     # Paging
     limit = int(paging.get("limit", DEFAULT_LIMIT))
     offset = int(paging.get("offset", 0))
@@ -182,6 +237,7 @@ def run_query():
                     f"-c idle_in_transaction_session_timeout={STATEMENT_TIMEOUT_MS} "
                     f"-c search_path=public",
         ) as conn:
+            register_vector(conn)
             with conn.cursor() as cur:
                 cur.execute(rendered, typed)
                 rows = cur.fetchall()

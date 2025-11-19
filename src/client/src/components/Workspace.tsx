@@ -81,7 +81,7 @@ export const Workspace: React.FC = () => {
       alive = false;
       window.clearInterval(intervalId);
     }
-  }, [session?.sessionId, setSessionRemote, pushNotification]);
+  }, [session?.sessionId, setSessionRemote]);
 
   // Overlay follows loading state
   React.useEffect(() => {
@@ -100,7 +100,7 @@ export const Workspace: React.FC = () => {
       const msg = err instanceof Error ? err.message : String(err);
       pushNotification(`Failed to save session: ${msg}`, "error");
     })
-  }, [session, pushNotification]);
+  }, [session]);
 
   if (!session && !loading) {
     // Hard failure; couldn't load session at all

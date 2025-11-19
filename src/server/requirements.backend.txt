@@ -2,10 +2,13 @@ python-dotenv
 flask
 gunicorn
 joblib
-psycopg[binary]
+SQLAlchemy
+psycopg[binary]>=3.2,<4.0
+pgvector
 redis>=5.0
 retromol==1.1.0
 biocracker==1.1.1
 versalign==2.0.5
 paras @ git+https://github.com/bthedragonmaster/parasect.git@v2.0.0
 scikit-learn
+umap-learn

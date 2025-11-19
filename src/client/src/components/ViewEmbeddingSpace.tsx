@@ -1,7 +1,6 @@
 import React from "react";
 import Box from "@mui/material/Box";
 import Alert from "@mui/material/Alert";
-import Paper from "@mui/material/Paper";
 import Typography from "@mui/material/Typography";
 import CircularProgress from "@mui/material/CircularProgress";
 import { ScatterChart } from "@mui/x-charts/ScatterChart";
@@ -29,6 +28,10 @@ export const ViewEmbeddingSpace: React.FC<ViewEmbeddingSpaceProps> = ({
   const [points, setPoints] = React.useState<EmbeddingPoint[] | null>(null);
   const [loading, setLoading] = React.useState<boolean>(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  // Container ref + size for square embedding space
+  const embeddingSpaceContainerRef = React.useRef<HTMLDivElement | null>(null);
+  const [embeddingSpaceSize, setEmbeddingSpaceSize] = React.useState<number | null>(null);
 
   // Map item ID -> name for tooltips/labels
   const parentById = React.useMemo(() => {
@@ -86,7 +89,10 @@ export const ViewEmbeddingSpace: React.FC<ViewEmbeddingSpaceProps> = ({
     if (!session.items || session.items.length === 0) return "";
 
     return session.items
-      .map((item) => `${item.id}:${item.status}:${item.updatedAt}`)
+      .map((item) => {
+        const fpIds = (item.fingerprints || []).map((fp) => fp.id).join(",");
+        return `${item.id}:${item.status}:${item.updatedAt}:${fpIds}`;
+      })
       .join("|")
   }, [session.items]);
 
@@ -101,7 +107,7 @@ export const ViewEmbeddingSpace: React.FC<ViewEmbeddingSpaceProps> = ({
     if (!itemsWithFingerprints || itemsWithFingerprints.length < 2) {
       setPoints(null);
       setLoading(false);
-      setError(`At least two readouts are required to view the embedding space.`);
+      setError(`At least three readouts are required to view the embedding space.`);
       return;
     }
 
@@ -128,7 +134,25 @@ export const ViewEmbeddingSpace: React.FC<ViewEmbeddingSpaceProps> = ({
     return () => {
       cancelled = true;
     }
-  }, [itemsWithFingerprints, pushNotification]); // only rerun when itemsKey changes (i.e., notable changes to session items)
+  }, [itemsKey]); // only rerun when itemsKey changes (i.e., notable changes to session items)
+
+  // Adjust embedding space size on container resize
+  React.useLayoutEffect(() => {
+    if (typeof ResizeObserver === "undefined") return;
+
+    const element = embeddingSpaceContainerRef.current;
+    if (!element) return;
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const width = entry.contentRect.width;
+        setEmbeddingSpaceSize((prev) => (prev === width ? prev : width));
+      }
+    });
+
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [points])
 
   // No items at all
   if (!itemsWithFingerprints || itemsWithFingerprints.length === 0) {
@@ -141,10 +165,47 @@ export const ViewEmbeddingSpace: React.FC<ViewEmbeddingSpaceProps> = ({
     )
   }
 
+  // Calculate axes limits and add some padding
+  const axisLimits = React.useMemo(() => {
+    if (!points || points.length === 0) {
+      return { xMin: undefined, xMax: undefined, yMin: undefined, yMax: undefined };
+    }
+
+    let minX = points[0].x;
+    let maxX = points[0].x;
+    let minY = points[0].y;
+    let maxY = points[0].y;
+    for (const p of points) {
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.y > maxY) maxY = p.y;
+    }
+
+    const xRange = maxX - minX;
+    const yRange = maxY - minY;
+
+    // Use the larger range for both axes
+    const baseRange = Math.max(xRange, yRange) || 1; // avoid 0
+    const paddingFactor = 0.2; // 20% padding
+    const fullRange = baseRange * (1 + paddingFactor);
+
+    const xCenter = (minX + maxX) / 2;
+    const yCenter = (minY + maxY) / 2;
+
+    const halfRange = fullRange / 2;
+
+    return {
+      xMin: xCenter - halfRange,
+      xMax: xCenter + halfRange,
+      yMin: yCenter - halfRange,
+      yMax: yCenter + halfRange,
+    };
+  }, [points]);
+
   return (
     <Box>
-      {/* Loading spinner on mount/fetch */}
-      {loading && (
+      {loading ? (
         <Box
           sx={{
             display: "flex",
@@ -155,61 +216,66 @@ export const ViewEmbeddingSpace: React.FC<ViewEmbeddingSpaceProps> = ({
         >
           <CircularProgress />
         </Box>
-      )}
-
-      {/* Error message if fetch failed */}
-      {error && (
+      ) : error ? (
         <Box>
           <Alert severity="error">
             {error}
           </Alert>
         </Box>
-      )}
-
-      {/* Embedding space visualization */}
-      {!loading && !error && points && points.length > 0 && (
-        <Paper
-          elevation={2}
-          sx={{
-            p: 2,
-            height: 420,
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
+      ) : !loading && !error && points && points.length > 0 ? (
           <Box sx={{ flex: 1, minHeight: 0 }}>
-            <ScatterChart
-              height={360}
-              series={scatterSeries.map((group) => ({
-                label: labelMap[group.label] || group.label,
-                data: group.data,
-                valueFormatter: (_value, context) => {
-                  const idx = context.dataIndex;
-                  const point = group.data[idx];
-                  const score = scoreByChildId.get(point.id);
-                  return score != null
-                    ? `${point.name} (score ${(score * 100).toFixed(1)}%)`
-                    : point.name;
-                }
-              }))}
-              xAxis={[{ disableLine: true, disableTicks: true }]}
-              yAxis={[{ disableLine: true, disableTicks: true }]}
-              grid={{ horizontal: false, vertical: false }}
-              sx={{
-                // Hide any remaining tick labels just in case
-                "& .MuiChartsAxis-tickLabel": {
-                  display: "none",
-                },
-              }}
-            />
+            <Box
+              ref={embeddingSpaceContainerRef}
+              sx={{ width: "100%" }}
+            >
+              {embeddingSpaceSize && (
+                <ScatterChart
+                  width={embeddingSpaceSize}
+                  height={embeddingSpaceSize * 0.8}
+                  margin={{ top: 10, right: 10, bottom: 10, left: 10 }}
+                  series={scatterSeries.map((group) => ({
+                    label: labelMap[group.label] || group.label,
+                    data: group.data,
+                    markerSize: 5,
+                    valueFormatter: (_value, context) => {
+                      const idx = context.dataIndex;
+                      const point = group.data[idx];
+                      const score = scoreByChildId.get(point.id);
+                      return score != null
+                        ? `${point.name} (score ${(score * 100).toFixed(1)}%)`
+                        : point.name;
+                    },
+                  }))}
+                  // xAxis={[{ disableLine: true, disableTicks: true }]}
+                  // yAxis={[{ disableLine: true, disableTicks: true }]}
+                  xAxis={[{
+                    label: "Dimension 1",
+                    disableLine: false,
+                    disableTicks: true,
+                    min: axisLimits.xMin,
+                    max: axisLimits.xMax,
+                  }]}
+                  yAxis={[{
+                    label: "Dimension 2",
+                    disableLine: false,
+                    disableTicks: true,
+                    min: axisLimits.yMin,
+                    max: axisLimits.yMax,
+                  }]}
+                  grid={{ horizontal: false, vertical: false }}
+                  sx={{
+                    // Hide any remaining tick labels just in case
+                    "& .MuiChartsAxis-tickLabel": {
+                      display: "none",
+                    },
+                  }}
+                />
+              )}
+            </Box>
           </Box>
-        </Paper>
-      )}
-
-      {/* If backend returns no points */}
-      {!loading && !error && (!points || points.length === 0) && (
+      ) : (
         <Typography variant="body2">
-          No embedding points returned from backend.
+          No embedding points to display.
         </Typography>
       )}
     </Box>

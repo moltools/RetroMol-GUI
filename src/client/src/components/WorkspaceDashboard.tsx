@@ -66,7 +66,7 @@ export const WorkspaceDashboard: React.FC = () => {
     return () => {
       canceled = true;
     }
-  }, [pushNotification]); 
+  }, []); 
 
   return (
     <Box 

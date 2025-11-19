@@ -4,7 +4,7 @@ import time
 
 import numpy as np
 from flask import Blueprint, current_app, request, jsonify
-from sklearn.decomposition import PCA
+import umap
 
 from routes.helpers import hex_to_bits
 
@@ -74,9 +74,27 @@ def get_embedding_space() -> tuple[dict[str, str], int]:
                 bits_to_keep = np.any(gene_cluster_fps, axis=0)
                 fps = fps[:, bits_to_keep]
 
-            # Perform PCA to reduce to 2D
-            pca = PCA(n_components=2)
-            reduced = pca.fit_transform(fps)
+            # Reduce dimensionality using UMAP
+            n_samples = fps.shape[0]
+            if n_samples == 1:
+                # Single point: put it at the origin (jitter will be applied later so might not be exactly at origin)
+                reduced = np.zeros((1, 2))
+            elif n_samples <= 3:
+                # UMAP's spectral step is fragile for very small N
+                # Put points on unit circle evenly spaced
+                angles = np.linspace(0, 2 * np.pi, n_samples, endpoint=False)
+                reduced = np.stack([np.cos(angles), np.sin(angles)], axis=1)
+            else:
+                # UMAP requires num_neighbors < num_samples
+                n_neighbors = min(15, n_samples - 1)
+                reducer = umap.UMAP(
+                    n_components=2,
+                    n_neighbors=n_neighbors,
+                    random_state=42,
+                    min_dist=0.1,
+                    metric="cosine"
+                )
+                reduced = reducer.fit_transform(fps)
 
             points = [
                 {
