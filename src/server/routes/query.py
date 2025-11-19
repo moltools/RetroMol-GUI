@@ -108,6 +108,11 @@ QUERIES = {
         "sql": """
             SELECT
                 rf.id AS identifier,
+                CASE
+                    WHEN rf.retromol_compound_id IS NOT NULL AND rf.biocracker_genbank_id IS NULL THEN 'compound'
+                    WHEN rf.biocracker_genbank_id IS NOT NULL AND rf.retromol_compound_id IS NULL THEN 'gene_cluster'
+                    ELSE 'unknown'
+                END AS type,
                 cr.source AS source,
                 cr.ext_id AS ext_id,
                 cr.name AS name,

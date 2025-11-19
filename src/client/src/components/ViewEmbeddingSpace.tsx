@@ -11,7 +11,7 @@ import { getEmbeddingSpace } from "../features/views/api";
 
 const labelMap: Record<string, string> = {
   "compound": "Compound",
-  "gene_cluster": "Biosynthetic gene cluster",
+  "gene_cluster": "BGC",
 }
 
 interface ViewEmbeddingSpaceProps {

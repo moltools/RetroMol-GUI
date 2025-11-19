@@ -17,6 +17,7 @@ import { SessionItem } from "../features/session/types";
 import { alpha } from "@mui/material/styles";
 import type { Theme } from "@mui/material/styles";
 import { ScoreBar } from "./ScoreBar";
+import { ItemKindChip } from "./ItemKindChip";
 
 type WorkspaceItemCardProps = {
   item: SessionItem;
@@ -176,7 +177,8 @@ export const WorkspaceItemCard: React.FC<WorkspaceItemCardProps> = ({
           )}
 
           <Stack direction="column" spacing={0.5}>
-            <Stack direction="row" spacing={0.5} alignItems="center" width="200px">
+            <Stack direction="row" spacing={0.5} alignItems="center" width="400px">
+              <ItemKindChip itemKind={item.kind} />
               {isEditing ? (
                 <TextField
                   size="small"

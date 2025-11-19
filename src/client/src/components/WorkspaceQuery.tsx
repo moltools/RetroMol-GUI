@@ -21,6 +21,7 @@ import { useNotifications } from "../components/NotificationProvider";
 import { Session, SessionItem } from "../features/session/types";
 import { runQuery } from "../features/query/api";
 import type { QueryResult } from "../features/query/types";
+import { ItemKindChip } from "./ItemKindChip";
 
 interface WorkspaceQueryProps {
   session: Session;
@@ -42,10 +43,11 @@ const buildExtIdUrl = (source: string | undefined, extId: string) => {
 
 const columnNameMap: Record<string, string> = {
   identifier: "Readout ID",
+  type: "Type",
   source: "Source",
   ext_id: "External ID",
   name: "Name",
-  score: "Score (%)",
+  score: "Similarity (%)",
 };
 
 export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSession }) => {
@@ -188,6 +190,15 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
         resizable: true,
       }
 
+      // For "type" column, render ItemKindChip
+      if (col === "type") {
+        base.renderCell = (params) => {
+          const itemKind = params.value as string | undefined;
+          if (!itemKind) return null;
+          return <ItemKindChip itemKind={itemKind} />;
+        }
+      }
+
       // Format source values
       if (col === "source") {
         base.valueGetter = (value) => {
@@ -263,7 +274,7 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
             >
               Upload tab
             </MuiLink>
-            &nbsp;and query it against the BioNexus database for compounds and biosynthetic gene clusters. The results
+            &nbsp;and query it against the BioNexus database for compounds and BGCs (biosynthetic gene clusters). The results
             data frame shows nearest neighbors based on fingerprint similarity. The enrichment results show overrepresented
             annotations among the hits compared to the background database.
             You can
