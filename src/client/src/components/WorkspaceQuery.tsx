@@ -4,6 +4,7 @@ import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
 import Grid from "@mui/material/Grid";
 import MuiLink from "@mui/material/Link";
+import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
 import MenuItem from "@mui/material/MenuItem";
@@ -15,6 +16,7 @@ import CircularProgress from "@mui/material/CircularProgress";
 import Alert from "@mui/material/Alert";
 import { DataGrid, GridColDef, GridPaginationModel } from "@mui/x-data-grid";
 import NotificationsRoundedIcon from "@mui/icons-material/NotificationsRounded";
+import UploadFileIcon from "@mui/icons-material/UploadFile";
 import { useTheme } from "@mui/material/styles";
 import { Link as RouterLink } from "react-router-dom";
 import { useNotifications } from "../components/NotificationProvider";
@@ -22,6 +24,7 @@ import { Session, SessionItem } from "../features/session/types";
 import { runQuery } from "../features/query/api";
 import type { QueryResult } from "../features/query/types";
 import { ItemKindChip } from "./ItemKindChip";
+import { importCompoundById } from "../features/jobs/api";
 
 interface WorkspaceQueryProps {
   session: Session;
@@ -62,6 +65,16 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
     pageSize: 10,
     page: 0,
   })
+
+  // Helper to build deps for import service
+  const deps = React.useMemo(
+    () => ({
+      setSession,
+      pushNotification,
+      sessionId: session.sessionId,
+    }),
+    [setSession, pushNotification, session.sessionId]
+  )
 
   // Items that have at least one fingerprint/readout
   const itemsWithFingerprints = React.useMemo(() => {
@@ -178,10 +191,46 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
     fetchResults(newModel);
   }
 
+  // Row action handler
+  const handleRowAction = React.useCallback(
+    (row: any) => {
+      // Extract necessary info from the row
+      const type = row.type as string | undefined;
+      const identifier = row.identifier as string | undefined;
+
+      // Only allow type "compound" for now
+      if (type !== "compound") {
+        pushNotification(`Import for item type "${type}" is not supported yet.`, "warning");
+        return;
+      }
+
+      // Check if both are present
+      if (!type || !identifier) {
+        pushNotification("Cannot import item: missing type or identifier.", "error");
+        return;
+      }
+
+      // Use importCompoundById to import the compound
+      importCompoundById(deps, identifier).then((item) => {
+        if (item) {
+          pushNotification(`Imported item "${item.name}" into your workspace`, "success");
+        } else {
+          pushNotification("Failed to import item", "error");
+        }
+      }).catch((err) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        pushNotification(`Import failed: ${msg}`, "error");
+      });
+    },
+    [setSession, pushNotification, deps]
+  )
+
+  // Define columns based on result columns
   const columns: GridColDef[] = React.useMemo(() => {
     if (!result) return [];
 
-    return result.columns.map((col) => {
+    // return result.columns.map((col) => {
+    const baseColumns: GridColDef[] = result.columns.map((col) => {
       const base: GridColDef = {
         field: col,
         headerName: columnNameMap[col] || col,
@@ -230,8 +279,38 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
 
       return base;
     })
+
+    // Add extra column with Import action button
+    const actionColumn: GridColDef = {
+      field: "actions",
+      headerName: "",
+      sortable: false,
+      filterable: false,
+      resizable: false,
+      disableColumnMenu: true,
+      align: "center",
+      headerAlign: "center",
+      width: 50,
+      renderCell: (params) => (
+        // Only show import button for compounds for now
+        params.row.type === "compound" ? (
+          <Box sx={{ pt: 0.5 }}>
+            <Tooltip title="Import this item into your workspace" arrow>
+              <UploadFileIcon
+                fontSize="small"
+                sx={{ cursor: "pointer" }}
+                onClick={() => handleRowAction(params.row)}
+              />
+            </Tooltip>
+          </Box>
+        ) : null
+      ),
+    }
+
+    return [...baseColumns, actionColumn];
   }, [result]);
 
+  // Map result rows to DataGrid rows with unique IDs
   const rows = React.useMemo(() => {
     if (!result) return [];
     return result.rows.map((row, idx) => ({
@@ -392,6 +471,8 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
                     noRowsLabel: result ? "No rows returned." : "Run a query to see results.",
                   }}
                   sx={{
+                    // No border radius to align with CardContent
+                    borderRadius: 0,
                     // Make all icon buttons inside the grid "flat"
                     "& .MuiIconButton-root": {
                       backgroundColor: "transparent !important",
@@ -404,6 +485,17 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
                     // optional: also nuke any outlined/button-style things in the footer/toolbar
                     "& .MuiButtonBase-root": {
                       boxShadow: "none",
+                    },
+                  }}
+                  slotProps={{
+                    filterPanel: {
+                      sx: {
+                        "& .MuiInputLabel-root": {
+                          backgroundColor: "background.paper",
+                          paddingLeft: 0.5,
+                          paddingRight: 0.5,
+                        },
+                      },
                     },
                   }}
                 />

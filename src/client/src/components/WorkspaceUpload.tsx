@@ -14,23 +14,18 @@ import { DialogImportCompound } from "./DialogImportCompound";
 import { DialogImportGeneCluster } from "./DialogImportGeneCluster";
 import { DialogViewItem } from "./DialogViewItem";
 import { WorkspaceItemCard } from "./WorkspaceItemCard";
-import { Session, SessionItem } from "../features/session/types";
-import { saveSession } from "../features/session/api";
-import { submitCompoundJob, submitGeneClusterJob } from "../features/jobs/api";
+import { Session } from "../features/session/types";
+import { NewCompoundJob } from "../features/jobs/types";
+import {
+  MAX_ITEMS,
+  importCompound,
+  importCompoundsBatch,
+  importGeneClustersBatch,
+} from "../features/jobs/api";
 
-const MAX_ITEMS = 200;
+// const MAX_ITEMS = 200;
 const MAX_FILE_SIZE_MB = 2;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
-
-type WorkspaceUploadProps = {
-  session: Session;
-  setSession: (updated: (prev: Session) => Session) => void;
-}
-
-type NewCompoundJob = {
-  name: string;
-  smiles: string;
-}
 
 async function parseCompoundFile(file: File): Promise<NewCompoundJob[]> {
   const text = await file.text();
@@ -75,6 +70,11 @@ async function parseCompoundFile(file: File): Promise<NewCompoundJob[]> {
   return compounds;
 }
 
+type WorkspaceUploadProps = {
+  session: Session;
+  setSession: (updated: (prev: Session) => Session) => void;
+}
+
 export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSession }) => {
   const theme = useTheme();
   const { pushNotification } = useNotifications();
@@ -85,6 +85,16 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
   const [viewingItemId, setViewingItemId] = React.useState<string | null>(null);
 
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
+
+  // Helper to build deps for import service
+  const deps = React.useMemo(
+    () => ({
+      setSession,
+      pushNotification,
+      sessionId: session.sessionId,
+    }),
+    [setSession, pushNotification, session.sessionId]
+  )
 
   // Renaming helper
   const handleRenameItem = (id: string, newName: string) => {
@@ -146,122 +156,11 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
     setSelectedIds(new Set());
   }
 
-  // Actions and handlers for compounds
-  const importCompounds = async (compounds: NewCompoundJob[]) => {
-    if (compounds.length === 0) {
-      pushNotification("No valid compounds to import", "warning");
-      return;
-    }
-    
-    let nextSession: Session | null = null;
-    let newItems: SessionItem[] = [];
-
-    setSession(prev => {
-      const existingCount = prev.items.length;
-      const remainingSlots = MAX_ITEMS - existingCount;
-
-      if (remainingSlots <= 0) {
-        pushNotification(`Workspace is full. Maximum of ${MAX_ITEMS} items allowed.`, "error");
-        nextSession = prev;
-        newItems = [];
-        return prev;
-      }
-
-      const limitedCompounds =
-        compounds.length > remainingSlots
-          ? compounds.slice(0, remainingSlots)
-          : compounds;
-
-      if (limitedCompounds.length < compounds.length) {
-        pushNotification(`Only ${remainingSlots} compounds were imported due to workspace limit of ${MAX_ITEMS} items.`, "warning");
-      }
-
-      // Build items only for actually-imported compounds
-      newItems = limitedCompounds.map(({ name, smiles }) => ({
-        id: crypto.randomUUID(),
-        kind: "compound",
-        name,
-        smiles,
-        fingerprints: [],
-        status: "queued",
-        errorMessage: null,
-        updatedAt: Date.now(),
-      }))
-
-      const updated: Session = {
-        ...prev,
-        items: [...prev.items, ...newItems],
-      }
-      nextSession = updated;
-      return updated;
-    })
-
-    // If nothing was added, bail out
-    if (!nextSession || newItems.length === 0) {
-      // Should not happen, but guard against it
-      return;
-    }
-
-    // Save session before submitting jobs
-    try {
-      await saveSession(nextSession);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      pushNotification(`Failed to save session: ${msg}`, "error");
-
-      const newIds = new Set(newItems.map(ni => ni.id));
-
-      // Mark just new items as error
-      setSession(prev => ({
-        ...prev,
-        items: prev.items.map((it) =>
-          newIds.has(it.id)
-            ? {
-                ...it,
-                status: "error",
-                errorMessage: `Failed to save session: ${msg}`,
-                updatedAt: Date.now(),
-              }
-            : it
-        ),
-      }))
-      return;
-    }
-
-    // Submit jobs for each new compound (sequential for now)
-    for (const item of newItems) {
-      if (item.kind !== "compound") continue;
-
-      try {
-        await submitCompoundJob(session.sessionId, item);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        pushNotification(`Failed to submit job for compound "${item.name}": ${msg}`, "error");
-
-        // Mark this item as error
-        setSession(prev => ({
-          ...prev,
-          items: prev.items.map((it) =>
-            it.id === item.id
-              ? {
-                  ...it,
-                  status: "error",
-                  errorMessage: `Failed to submit job: ${msg}`,
-                  updatedAt: Date.now(),
-                }
-              : it
-          ),
-        }))
-      }
-    }
-  }
-
-  const handleImportSingleCompound = async ({ name, smiles }: { name: string; smiles: string }) => {
-    await importCompounds([{ name, smiles }]);
+  const handleImportSingleCompound = async({ name, smiles}: { name: string; smiles: string }) => {
+    await importCompound(deps, { name, smiles });
   }
 
   const handleImportBatchCompounds = async (file: File) => {
-    // Check file size before reading
     if (file.size > MAX_FILE_SIZE_BYTES) {
       pushNotification(`The file "${file.name}" exceeds the maximum size of ${MAX_FILE_SIZE_MB} MB and was not imported.`, "error");
       return;
@@ -269,18 +168,16 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
 
     try {
       const compounds = await parseCompoundFile(file);
-      await importCompounds(compounds);
+      await importCompoundsBatch(deps, compounds);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       pushNotification(`Failed to parse compound file: ${msg}`, "error");
     }
   }
 
-  // Actions and handlers for gene clusters
   const handleImportGeneClusters = async (files: File[]) => {
     if (!files.length) return;
 
-    // Check file sizes before reading
     const oversized = files.filter(f => f.size > MAX_FILE_SIZE_BYTES);
     if (oversized.length > 0) {
       pushNotification(`The following files exceed the maximum size of ${MAX_FILE_SIZE_MB} MB and were not imported: ${oversized.map(f => f.name).join(", ")}`, "error");
@@ -294,8 +191,7 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
       pushNotification("No gene cluster files to import after size check.", "warning");
       return;
     }
-    
-    // Read all files into memory (name + content)
+
     let payloads: { name: string; fileContent: string }[] = [];
     try {
       payloads = await Promise.all(
@@ -310,107 +206,7 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
       return;
     }
 
-    let nextSession: Session | null = null;
-    let newItems: SessionItem[] = [];
-
-    // Add items to session with MAX_ITEMS guard
-    setSession((prev) => {
-      const existingCount = prev.items.length;
-      const remainingSlots = MAX_ITEMS - existingCount;
-
-      if (remainingSlots <= 0) {
-        pushNotification(`Workspace is full. Maximum of ${MAX_ITEMS} items allowed.`, "error");
-        nextSession = prev;
-        newItems = [];
-        return prev;
-      }
-
-      const limitedPayloads =
-        payloads.length > remainingSlots
-          ? payloads.slice(0, remainingSlots)
-          : payloads;
-      
-      if (limitedPayloads.length < payloads.length) {
-        pushNotification(`Only ${remainingSlots} gene clusters were imported due to workspace limit of ${MAX_ITEMS} items.`, "warning");
-      }
-
-      newItems = limitedPayloads.map(({ name, fileContent }) => ({
-        id: crypto.randomUUID(),
-        kind: "gene_cluster",
-        name,
-        fileContent,
-        fingerprints: [],
-        status: "queued",
-        errorMessage: null,
-        updatedAt: Date.now(),
-      }))
-      
-      const updated: Session = {
-        ...prev,
-        items: [...prev.items, ...newItems],
-      }
-
-      nextSession = updated;
-      return updated;
-    })
-
-    // Nothing added? bail
-    if (!nextSession || newItems.length === 0) {
-      return;
-    }
-
-    // Save session before submitting jobs
-    try {
-      await saveSession(nextSession);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      pushNotification(`Failed to save session: ${msg}`, "error");
-
-      const newIds = new Set(newItems.map(ni => ni.id));
-
-      // Mark just new items as error
-      setSession(prev => ({
-        ...prev,
-        items: prev.items.map((it) =>
-          newIds.has(it.id)
-            ? {
-                ...it,
-                status: "error",
-                errorMessage: `Failed to save session: ${msg}`,
-                updatedAt: Date.now(),
-              }
-            : it
-        ),
-      }))
-      return;
-    }
-
-    // Submit jobs for each new gene cluster (sequential for now)
-    for (const item of newItems) {
-      if (item.kind !== "gene_cluster") continue;
-
-      try {
-        await submitGeneClusterJob(session.sessionId, item);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        pushNotification(`Failed to submit job for gene cluster "${item.name}": ${msg}`, "error");
-
-        // Mark this item as error
-        setSession(prev => ({
-          ...prev,
-          items: prev.items.map((it) =>
-            it.id === item.id
-              ? {
-                  ...it,
-                  status: "error",
-                  errorMessage: `Failed to submit job: ${msg}`,
-                  updatedAt: Date.now(),
-                }
-              : it
-          ),
-        }))
-      }
-    }
+    await importGeneClustersBatch(deps, payloads);
   }
 
   // Selection states

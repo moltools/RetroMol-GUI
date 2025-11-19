@@ -1,7 +1,5 @@
 import React from "react";
-
-// Define possible notification levels
-export type NotificationLevel = "error" | "warning" | "success" | "info";
+import type { NotificationSeverity } from "../features/notifications/types";
 
 // Extend the Notification interface with a "level" property
 export interface Notification {
@@ -9,12 +7,12 @@ export interface Notification {
   content: string;
   timestamp: Date;
   isNew: boolean;
-  level: NotificationLevel;
+  level: NotificationSeverity;
 }
 
 export interface NotificationContextType {
   notifications: Notification[];
-  pushNotification: (content: string, level?: NotificationLevel) => void;
+  pushNotification: (content: string, level?: NotificationSeverity) => void;
   markAllAsRead: () => void;
   clearNotifications: () => void;
 }
@@ -33,7 +31,7 @@ export function useNotifications() {
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [notifications, setNotifications] = React.useState<Notification[]>([]);
 
-  const pushNotification = (content: string, level: NotificationLevel = "info") => {
+  const pushNotification = (content: string, level: NotificationSeverity = "info") => {
     console.log("Pushing notification:", content, level);
     setNotifications((prev) => {
       const newNotification: Notification = {

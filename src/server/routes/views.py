@@ -91,7 +91,6 @@ def get_embedding_space() -> tuple[dict[str, str], int]:
                     n_components=2,
                     n_neighbors=n_neighbors,
                     random_state=42,
-                    min_dist=0.1,
                     metric="cosine"
                 )
                 reduced = reducer.fit_transform(fps)
@@ -101,8 +100,8 @@ def get_embedding_space() -> tuple[dict[str, str], int]:
                     "parent_id": parent_id,
                     "child_id": child_id,
                     "kind": kind,
-                    "x": reduced[i, 0] + (np.random.uniform(-0.05, 0.05) if jitter else 0.0),
-                    "y": reduced[i, 1] + (np.random.uniform(-0.05, 0.05) if jitter else 0.0),
+                    "x": float(reduced[i, 0]),
+                    "y": float(reduced[i, 1]),
                 } for i, (kind, parent_id, child_id) in enumerate(zip(kinds, parent_ids, child_ids))
             ]
     except Exception as e:

@@ -137,6 +137,26 @@ QUERIES = {
         "required": { "fingerprint512": str },
         "optional": {},
         "preprocess_params": preprocess_cross_modal_params,
+    },
+    "compound_info_by_id": {
+        "sql": """
+            SELECT
+                cr.name,
+                c.smiles
+            FROM retrofingerprint AS rfp
+            JOIN retromol_compound AS rmc
+            ON rfp.retromol_compound_id = rmc.id
+            JOIN compound AS c
+            ON rmc.compound_id = c.id
+            JOIN compound_record AS cr
+            ON c.id = cr.compound_id
+            WHERE rfp.id = %(compound_id)s;
+            """,
+        "allowed_order_cols": set(),
+        "default_order_col": "",
+        "default_order_dir": "ASC",
+        "required": { "compound_id": int },
+        "optional": {},
     }
 }
 
