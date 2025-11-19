@@ -74,7 +74,7 @@ def mark_stale_processing_items() -> int:
         except json.JSONDecodeError:
             continue
 
-        if item.get("status") != "processing":
+        if item.get("status") not in ("processing", "queued"):
             continue
 
         updated_at = item.get("updatedAt", 0)
