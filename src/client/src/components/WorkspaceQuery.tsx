@@ -66,6 +66,9 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
     page: 0,
   })
 
+  const [importCooldown, setImportCooldown] = React.useState(false);
+  const IMPORT_COOLDOWN_MS = 3000;
+
   // Helper to build deps for import service
   const deps = React.useMemo(
     () => ({
@@ -194,9 +197,18 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
   // Row action handler
   const handleRowAction = React.useCallback(
     (row: any) => {
+      if (importCooldown) {
+        pushNotification("Please wait a moment before importing another item.", "info");
+        return;
+      }
+      
+      // Start global cooldown
+      setImportCooldown(true);
+      setTimeout(() => setImportCooldown(false), IMPORT_COOLDOWN_MS);
+
       // Extract necessary info from the row
       const type = row.type as string | undefined;
-      const identifier = row.identifier as string | undefined;
+      const identifier = row.identifier as number | undefined;
 
       // Only allow type "compound" for now
       if (type !== "compound") {
@@ -222,7 +234,7 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
         pushNotification(`Import failed: ${msg}`, "error");
       });
     },
-    [setSession, pushNotification, deps]
+    [importCooldown, pushNotification, deps]
   )
 
   // Define columns based on result columns
@@ -291,24 +303,35 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
       align: "center",
       headerAlign: "center",
       width: 50,
-      renderCell: (params) => (
+      renderCell: (params) => {
+        const isDisabled = importCooldown || params.row.type !== "compound";    
+
         // Only show import button for compounds for now
-        params.row.type === "compound" ? (
-          <Box sx={{ pt: 0.5 }}>
-            <Tooltip title="Import this item into your workspace" arrow>
-              <UploadFileIcon
-                fontSize="small"
-                sx={{ cursor: "pointer" }}
-                onClick={() => handleRowAction(params.row)}
-              />
-            </Tooltip>
-          </Box>
-        ) : null
-      ),
+        return (
+          params.row.type === "compound" ? (
+            <Box sx={{ pt: 0.5 }}>
+              <Tooltip
+                title={
+                  importCooldown
+                    ? "Please wait before importing another item"
+                    : "Import this item into your workspace"
+                }
+                arrow
+              >
+                <UploadFileIcon
+                  fontSize="small"
+                  sx={{ cursor: isDisabled ? "not-allowed" : "pointer" }}
+                  onClick={() => { if (!isDisabled) handleRowAction(params.row) }}
+                />
+              </Tooltip>
+            </Box>
+          ) : null
+        )
+      },
     }
 
     return [...baseColumns, actionColumn];
-  }, [result]);
+  }, [result, handleRowAction, importCooldown]);
 
   // Map result rows to DataGrid rows with unique IDs
   const rows = React.useMemo(() => {
