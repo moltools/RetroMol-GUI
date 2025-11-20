@@ -2,6 +2,7 @@ import React from "react";
 import Box from "@mui/material/Box";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
+import Chip from "@mui/material/Chip";
 import Grid from "@mui/material/Grid";
 import MuiLink from "@mui/material/Link";
 import Tooltip from "@mui/material/Tooltip";
@@ -75,8 +76,13 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
   const [enrichmentError, setEnrichmentError] = React.useState<string | null>(null);
   const [enrichmentResult, setEnrichmentResult] = React.useState<EnrichmentResult | null>(null);
 
+  const [paginationModelEnrichment, setPaginationModelEnrichment] = React.useState<GridPaginationModel>({
+    pageSize: 10,
+    page: 0,
+  })
+
   const [rowCount, setRowCount] = React.useState(0);
-  const [paginationModel, setPaginationModel] = React.useState<GridPaginationModel>({
+  const [paginationModelQuery, setPaginationModelQuery] = React.useState<GridPaginationModel>({
     pageSize: 10,
     page: 0,
   })
@@ -232,9 +238,9 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
   const handleRunQuery = async () => {
     const firstPageModel: GridPaginationModel = {
       page: 0,
-      pageSize: paginationModel.pageSize,
+      pageSize: paginationModelQuery.pageSize,
     };
-    setPaginationModel(firstPageModel);
+    setPaginationModelQuery(firstPageModel);
     
     const data = await fetchQueryResults(firstPageModel);
 
@@ -248,7 +254,7 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
 
   // DataGrid pagination event -> fetch that page from backend
   const handlePaginationModelChange = (newModel: GridPaginationModel) => {
-    setPaginationModel(newModel);
+    setPaginationModelQuery(newModel);
     void fetchQueryResults(newModel);
   }
 
@@ -560,7 +566,7 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
                   rows={rows}
                   columns={columns}
                   paginationMode="server"
-                  paginationModel={paginationModel}
+                  paginationModel={paginationModelQuery}
                   onPaginationModelChange={handlePaginationModelChange}
                   rowCount={rowCount}
                   pageSizeOptions={[10, 25, 50]}
@@ -620,20 +626,27 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
                 enrichmentResult.items.length > 0 ? (
                   <DataGrid
                     loading={enrichmentLoading}
-                    pageSizeOptions={[10, 25, 50]}
                     density="compact"
                     rows={enrichmentResult.items.map((item, idx) => ({
                       id: item.id,
-                      significant: item.p_value < 0.05,
+                      significant: item.adjusted_p_value < 0.05,
                       schema: item.schema,
                       key: item.key,
                       value: item.value,
-                      p_value: item.p_value,
                       adjusted_p_value: item.adjusted_p_value,
                     }))}
+                    pagination
+                    paginationModel={paginationModelEnrichment}
+                    onPaginationModelChange={setPaginationModelEnrichment}
+                    pageSizeOptions={[10, 25, 50]}
                     columns={[
                       { field: "significant", headerName: "Significant", flex: 1, sortable: true, resizable: true,
                         valueFormatter: (v: boolean) => v ? "Yes" : "No",
+                        renderCell: (params) => (
+                          params.value ? 
+                              <Chip label="Yes" color="success" size="small" sx={{ fontSize: "0.7rem", height: 20 }} /> :
+                              <Chip label="No" color="default" size="small" sx={{ fontSize: "0.7rem", height: 20 }} />
+                        )
                       },
                       { field: "schema", headerName: "Schema", flex: 1, sortable: true, resizable: true,
                         valueFormatter: (v: string) => v.toUpperCase(),
@@ -643,9 +656,6 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
                       },
                       { field: "value", headerName: "Value", flex: 1, sortable: true, resizable: true,
                         valueFormatter: (v: string) => v.toUpperCase(),
-                      },
-                      { field: "p_value", headerName: "P-value", flex: 1, sortable: true, resizable: true,
-                        valueFormatter: (v: number) => v.toExponential(3),
                       },
                       { field: "adjusted_p_value", headerName: "Adjusted P-value", flex: 1, sortable: true, resizable: true,
                         valueFormatter: (v: number) => v.toExponential(3),

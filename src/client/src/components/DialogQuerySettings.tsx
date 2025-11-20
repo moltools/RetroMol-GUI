@@ -24,7 +24,7 @@ export const DialogQuerySettings: React.FC<DialogQuerySettingsProps> = ({
     if (Number.isFinite(value)) {
       handleSettingsChange({
         ...settings,
-        [key]: value,
+        [key]: value / 100, // Convert to 0-1 range
       });
     }
   }
@@ -48,14 +48,14 @@ export const DialogQuerySettings: React.FC<DialogQuerySettingsProps> = ({
         </Typography>
         <TextField
           type="number"
-          value={settings.scoreThreshold}
+          value={settings.scoreThreshold * 100} // Convert to 0-100 range
           onChange={handleScoreThresholdChange("scoreThreshold")}
           inputProps={{
-            step: 0.01,
+            step: 1,
             min: 0,
-            max: 1,
+            max: 100,
           }}
-          helperText="Value between 0 and 1"
+          helperText="Value between 0 and 100 (%)"
           fullWidth
           // Change input label background
           sx={{
