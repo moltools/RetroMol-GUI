@@ -178,43 +178,45 @@ export const WorkspaceItemCard: React.FC<WorkspaceItemCardProps> = ({
 
           <Stack direction="column" spacing={0.5}>
             <Stack direction="row" spacing={0.5} alignItems="center" width="400px">
-              <ItemKindChip itemKind={item.kind} />
-              {isEditing ? (
-                <TextField
-                  size="small"
-                  variant="standard"
-                  value={draftName}
-                  autoFocus
-                  onClick={(e) => e.stopPropagation()}
-                  onChange={(e) => setDraftName(e.target.value)}
-                  onKeyDown={handleNameKeyDown}
-                  onBlur={commitEditing}
-                  inputProps={{
-                    style: { fontSize: "0.875rem", fontWeight: 500 },
-                  }}
-                /> 
-              ) : (
-                <>
-                  <Typography
-                    variant="body2"
-                    fontWeight={500}
-                    noWrap
-                    sx={{ maxWidth: 220 }}
-                  >
-                    {item.name}
-                  </Typography>
-                  {isDone && (
-                    <EditIcon
-                      onClick={startEditing}
-                      sx={{
-                        fontSize: 16,
-                        cursor: "pointer",
-                        ml: 0.5
-                      }}
-                    />
-                  )}
-                </>
-              )}
+              <Stack direction="row" alignItems="center" spacing={1}>
+                <ItemKindChip itemKind={item.kind} />
+                {isEditing ? (
+                  <TextField
+                    size="small"
+                    variant="standard"
+                    value={draftName}
+                    autoFocus
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => setDraftName(e.target.value)}
+                    onKeyDown={handleNameKeyDown}
+                    onBlur={commitEditing}
+                    inputProps={{
+                      style: { fontSize: "0.875rem", fontWeight: 500 },
+                    }}
+                  /> 
+                ) : (
+                  <>
+                    <Typography
+                      variant="body2"
+                      fontWeight={500}
+                      noWrap
+                      sx={{ maxWidth: 220 }}
+                    >
+                      {item.name}
+                    </Typography>
+                    {isDone && (
+                      <EditIcon
+                        onClick={startEditing}
+                        sx={{
+                          fontSize: 16,
+                          cursor: "pointer",
+                          ml: 0.5
+                        }}
+                      />
+                    )}
+                  </>
+                )}
+              </Stack>
             </Stack>
 
             <Typography variant="caption" color="text.secondary">

@@ -21,6 +21,7 @@ export const ItemKindChip: React.FC<ItemKindChipProps> = ({ itemKind }) => {
       label={labelMap[itemKind] || "Unknown"}
       color={colorMap[itemKind] || "default"}
       size="small"
+      sx={{ fontSize: "0.7rem", height: 20 }}
     />
   );
 }

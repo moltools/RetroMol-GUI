@@ -93,7 +93,7 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
       pushNotification,
       sessionId: session.sessionId,
     }),
-    [setSession, pushNotification, session.sessionId]
+    [setSession, session.sessionId]
   )
 
   // Renaming helper

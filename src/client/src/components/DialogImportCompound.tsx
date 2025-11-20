@@ -96,7 +96,7 @@ export const DialogImportCompound: React.FC<DialogImportCompoundProps> = ({
     }, 250); // 250ms debounce
 
     return () => clearTimeout(handle);
-  }, [compoundName, open, pushNotification]);
+  }, [compoundName, open]);
 
   return (
     <DialogWindow

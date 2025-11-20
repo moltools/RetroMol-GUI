@@ -3,13 +3,16 @@
 import time
 
 import numpy as np
-from flask import Blueprint, current_app, request, jsonify
 import umap
+from pgvector import Vector
+from flask import Blueprint, current_app, request, jsonify
 
 from routes.helpers import hex_to_bits
+from routes.query import execute_named_query
 
 
 blp_get_embedding_space = Blueprint("get_embedding_space", __name__)
+blp_enrich = Blueprint("enrich", __name__)
 
 
 @blp_get_embedding_space.post("/api/getEmbeddingSpace")
@@ -23,7 +26,6 @@ def get_embedding_space() -> tuple[dict[str, str], int]:
 
     session_id = payload.get("sessionId")
     items = payload.get("items", [])
-    jitter = True
 
     current_app.logger.info(f"get_embedding_space called: session_id={session_id} items_count={len(items)}")
 
@@ -116,4 +118,106 @@ def get_embedding_space() -> tuple[dict[str, str], int]:
         "status": "done",
         "elapsed_ms": elapsed,
         "points": points
+    }), 200
+
+
+@blp_enrich.post("/api/enrich")
+def run_enrichment() -> tuple[dict[str, str], int]:
+    """
+    Handle POST requests to run enrichment analysis.
+
+    :return: a tuple containing an empty dictionary and HTTP status code 200
+    """
+    payload = request.get_json(force=True) or {}
+
+    fp_hex_string = payload.get("fingerprint512")
+    query_settings = payload.get("querySettings", {})
+
+    # Guard against missing fingerprint
+    if not fp_hex_string:
+        return jsonify({"error": "Missing fingerprint512"}), 400
+
+    t0 = time.time()
+
+    result = execute_named_query(
+        name="cross_modal_retrieval",
+        params={
+            "fingerprint512": fp_hex_string,
+            "querySettings": query_settings,
+        },
+        paging={},
+        order={},
+    )
+
+    # If num_rows is equal to max_limit_in_group, we know there are more results
+    # Throw error and ask user to up the score threshold
+    max_limit_in_group = 1000
+    num_rows = len(result["rows"])
+    if num_rows >= max_limit_in_group:
+        return jsonify({
+            "error": f"Too many items in in-group (>={max_limit_in_group}). Please increase the score threshold in query settings and try again."
+        }), 400
+
+    # Get unique IDs
+    compound_ids = set([item["identifier"] for item in result["rows"]])
+    print(compound_ids)
+    genbank_region_ids = []
+
+    # Get all annotation counts
+    result = execute_named_query(
+        name="annotation_counts_full",
+        params={},
+        paging={ "limit": 1000 },
+        order={},
+    )
+    num_annotations = len(result["rows"])
+    print(f"Number of annotations: {num_annotations}")
+    print(result["rows"][0])
+
+    # Get annotation counts for subset
+    result = execute_named_query(
+        name="annotation_counts_subset",
+        params={
+            "compound_ids": list(compound_ids),
+            "genbank_region_ids": list(genbank_region_ids),
+        },
+        paging={ "limit": 1000 },
+        order={},
+    )
+
+    elapsed = int((time.time() - t0) * 1000)
+
+    return jsonify({
+        "ok": True,
+        "status": "done",
+        "elapsed_ms": elapsed,
+        "result": {
+            "querySettings": query_settings,
+            "items": [
+                {
+                    "id": "item1",
+                    "schema": "biosynthesis",
+                    "key": "product",
+                    "value": "arylpolyene",
+                    "p_value": 0.001,
+                    "adjusted_p_value": 0.005,
+                },
+                {
+                    "id": "item2",
+                    "schema": "npclassifier",
+                    "key": "class",
+                    "value": "Ceramides",
+                    "p_value": 0.02,
+                    "adjusted_p_value": 0.04,
+                },
+                {
+                    "id": "item3",
+                    "schema": "modification",
+                    "key": "methylation",
+                    "value": "mono-methylation",
+                    "p_value": 0.5,
+                    "adjusted_p_value": 0.6,
+                },
+            ],
+        }
     }), 200

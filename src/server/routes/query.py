@@ -16,8 +16,7 @@ blp = Blueprint("query", __name__)
 
 
 # Knobs
-MAX_LIMIT = 500
-DEFAULT_LIMIT = 100
+DEFAULT_LIMIT = 500
 MAX_OFFSET = 50_000
 STATEMENT_TIMEOUT_MS = 3000  # 3 seconds
 
@@ -50,6 +49,10 @@ def preprocess_cross_modal_params(typed: dict) -> dict:
     fp = hex_to_bits(fp_hex_string)
     fp = [float(x) for x in fp]
     typed["qv"] = Vector(fp)
+
+    score_threshold = typed.get("querySettings", {}).get("scoreThreshold", 0.0)
+    print(score_threshold)
+    typed["score_threshold"] = score_threshold
 
     return typed
 
@@ -116,10 +119,7 @@ QUERIES = {
                 cr.source AS source,
                 cr.ext_id AS ext_id,
                 cr.name AS name,
-                ROUND(
-                    ((1.0 - (rf.fp_retro_b512_vec_binary <=> %(qv)s)) * 100)::numeric,
-                    2
-                ) AS score
+                (1.0 - (rf.fp_retro_b512_vec_binary <=> %(qv)s)) AS score
             FROM retrofingerprint AS rf
             JOIN retromol_compound rmc
             ON rmc.id = rf.retromol_compound_id
@@ -129,12 +129,13 @@ QUERIES = {
             ON cr.compound_id = c.id
             WHERE vector_norm(rf.fp_retro_b512_vec_binary) > 0
             AND vector_norm(%(qv)s) > 0
+            AND (1.0 - (rf.fp_retro_b512_vec_binary <=> %(qv)s)) >= %(score_threshold)s
             ORDER BY {order_col} {order_dir}
         """,
         "allowed_order_cols": {"identifier", "name", "source", "ext_id", "score"},
         "default_order_col": "score",
         "default_order_dir": "DESC",
-        "required": { "fingerprint512": str },
+        "required": { "fingerprint512": str, "querySettings": dict },
         "optional": {},
         "preprocess_params": preprocess_cross_modal_params,
     },
@@ -151,12 +152,59 @@ QUERIES = {
             JOIN compound_record AS cr
             ON c.id = cr.compound_id
             WHERE rfp.id = %(compound_id)s;
-            """,
+        """,
         "allowed_order_cols": set(),
         "default_order_col": "",
         "default_order_dir": "ASC",
         "required": { "compound_id": int },
         "optional": {},
+    },
+    "annotation_counts_full": {
+        "sql": """
+            SELECT
+                scheme,
+                key,
+                value,
+                COUNT(*) AS annotation_count,
+                COUNT(DISTINCT compound_id) AS n_compounds,
+                COUNT(DISTINCT genbank_region_id) AS n_genbank_regions
+            FROM annotation
+            GROUP BY scheme, key, value
+            ORDER BY {order_col} {order_dir}
+        """,
+        "allowed_order_cols": {"scheme", "key", "value", "annotation_count", "n_compounds", "n_genbank_regions"},
+        "default_order_col": "annotation_count",
+        "default_order_dir": "DESC",
+        "required": {},
+        "optional": {},
+    },
+    "annotation_counts_subset": {
+        "sql": """
+            SELECT
+                scheme,
+                key,
+                value,
+                COUNT(*) AS annotation_count,
+                COUNT(DISTINCT compound_id) AS n_compounds,
+                COUNT(DISTINCT genbank_region_id) AS n_genbank_regions
+            FROM annotation
+            WHERE
+                (
+                    (:compound_ids IS NULL OR compound_id = ANY(:compound_ids))
+                    OR
+                    (:genbank_region_ids IS NULL OR genbank_region_id = ANY(:genbank_region_ids))
+                )
+            GROUP BY scheme, key, value
+            ORDER BY annotation_count DESC;
+        """,
+        "allowed_order_cols": {"scheme", "key", "value", "annotation_count", "n_compounds", "n_genbank_regions"},
+        "default_order_col": "annotation_count",
+        "default_order_dir": "DESC",
+        "required": {},
+        "optional": {
+            "compound_ids": list,
+            "genbank_region_ids": list,
+        },
     }
 }
 
@@ -184,29 +232,39 @@ def coerce_params(spec: dict[str, type], data: dict) -> tuple[dict, str | None]:
     return out, None
 
 
-@blp.post("/api/query")
-def run_query():
+def execute_named_query(
+    name: str,
+    params: dict | None = None,
+    paging: dict | None = None,
+    order: dict | None = None,
+) -> dict:
     """
-    Run a predefined database query with parameters, paging, and ordering.
+    Execute a predefined database query with parameters, paging, and ordering.
 
-    :return: JSON response with query results or error message
+    :param name: the name of the predefined query
+    :param params: a dictionary of query parameters
+    :param paging: a dictionary with 'limit' and 'offset' for paging
+    :param order: a dictionary with 'column' and 'dir' for ordering
+    :return: a dictionary with query results
+    :raises ValueError: if there is a parameter validation error
+    :raises TimeoutError: if the query times out
+    :raises RuntimeError: if there is a database error
     """
-    payload = request.get_json(force=True) or {}
-    name = payload.get("name")
+    params = params or {}
+    paging = paging or {}
+    order = order or {}
+
     if not name or name not in QUERIES:
-        return jsonify({"error": "Unknown query name"}), 400
+        raise ValueError("Invalid or missing query name")
     
     qinfo = QUERIES[name]
-    params = payload.get("params", {})
-    paging = payload.get("paging", {})
-    order = payload.get("order", {})
 
     # Validate required/optional params
     req_spec = qinfo.get("required", {})
     opt_spec = qinfo.get("optional", {})
     typed, err = coerce_params(req_spec, params)
     if err:
-        return jsonify({"error": err}), 400
+        raise ValueError(err)
     # Optional params (coerce if present)
     for k, typ in opt_spec.items():
         if k in params:
@@ -216,7 +274,7 @@ def run_query():
                 elif typ is str: typed[k] = str(params[k])
                 else: typed[k] = params[k]
             except Exception:
-                return jsonify({"error": f"Invalid type for {k}"}), 400
+                raise ValueError(f"Invalid type for {k}")
             
     # Preprocess params for specific queries
     preprocess = qinfo.get("preprocess_params")
@@ -224,12 +282,11 @@ def run_query():
         try:
             typed = preprocess(typed) or typed
         except Exception as e:
-            return jsonify({"error": f"Parameter preprocessing error: {str(e)}"}), 400
+            raise ValueError(f"Parameter preprocessing error: {str(e)}")
             
     # Paging
     limit = int(paging.get("limit", DEFAULT_LIMIT))
     offset = int(paging.get("offset", 0))
-    limit = max(1, min(MAX_LIMIT, limit))
     offset = max(0, min(MAX_OFFSET, offset))
     typed["limit"] = limit
     typed["offset"] = offset
@@ -268,14 +325,14 @@ def run_query():
                 rows = cur.fetchall()
                 cols = [d.name for d in cur.description]
     except psycopg.errors.QueryCanceled:
-        return jsonify({"error": f"Query timeout (>{STATEMENT_TIMEOUT_MS} ms)"}), 408
+        raise TimeoutError(f"Query timeout (>{STATEMENT_TIMEOUT_MS} ms)")
     except Exception as e:
-        return jsonify({"error": f"Database error: {str(e)}", "detail": str(e)}), 400
+        raise RuntimeError(f"Database error: {str(e)}")
     
     elapsed = int((time.time() - t0) * 1000)
     out_rows = [dict(zip(cols, r)) for r in rows]
 
-    return jsonify({
+    return {
         "name": name,
         "columns": cols,
         "rows": out_rows,
@@ -283,4 +340,29 @@ def run_query():
         "limit": limit,
         "offset": offset,
         "elapsed_ms": elapsed,
-    }), 200
+    }
+
+
+@blp.post("/api/query")
+def run_query():
+    """
+    Run a predefined database query with parameters, paging, and ordering.
+
+    :return: JSON response with query results or error message
+    """
+    payload = request.get_json(force=True) or {}
+    name = payload.get("name")
+    params = payload.get("params", {})
+    paging = payload.get("paging", {})
+    order = payload.get("order", {})
+
+    try:
+        result = execute_named_query(name, params=params, paging=paging, order=order)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except TimeoutError as e:
+        return jsonify({"error": str(e)}), 408
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 400
+    
+    return jsonify(result), 200

@@ -17,14 +17,19 @@ import Alert from "@mui/material/Alert";
 import { DataGrid, GridColDef, GridPaginationModel } from "@mui/x-data-grid";
 import NotificationsRoundedIcon from "@mui/icons-material/NotificationsRounded";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
+import SettingsIcon from "@mui/icons-material/Settings";
 import { useTheme } from "@mui/material/styles";
 import { Link as RouterLink } from "react-router-dom";
 import { useNotifications } from "../components/NotificationProvider";
 import { Session, SessionItem } from "../features/session/types";
 import { runQuery } from "../features/query/api";
 import type { QueryResult } from "../features/query/types";
+import { runEnrichment } from "../features/views/api";
+import type { EnrichmentResult } from "../features/views/types";
 import { ItemKindChip } from "./ItemKindChip";
 import { importCompoundById } from "../features/jobs/api";
+import type { QuerySettings } from "../features/views/types";
+import { DialogQuerySettings } from "./DialogQuerySettings";
 
 interface WorkspaceQueryProps {
   session: Session;
@@ -50,15 +55,25 @@ const columnNameMap: Record<string, string> = {
   source: "Source",
   ext_id: "External ID",
   name: "Name",
-  score: "Similarity (%)",
+  score: "Similarity",
 };
 
 export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSession }) => {
   const theme = useTheme();
   const { pushNotification } = useNotifications();
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
-  const [result, setResult] = React.useState<QueryResult | null>(null);
+
+  const [settingsDialogOpen, setSettingsDialogOpen] = React.useState(false);
+  const [querySettings, setQuerySettings] = React.useState<QuerySettings>({
+    scoreThreshold: 0.7,
+  });
+
+  const [queryLoading, setQueryLoading] = React.useState(false);
+  const [queryError, setQueryError] = React.useState<string | null>(null);
+  const [queryResult, setQueryResult] = React.useState<QueryResult | null>(null);
+  
+  const [enrichmentLoading, setEnrichmentLoading] = React.useState(false);
+  const [enrichmentError, setEnrichmentError] = React.useState<string | null>(null);
+  const [enrichmentResult, setEnrichmentResult] = React.useState<EnrichmentResult | null>(null);
 
   const [rowCount, setRowCount] = React.useState(0);
   const [paginationModel, setPaginationModel] = React.useState<GridPaginationModel>({
@@ -76,7 +91,7 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
       pushNotification,
       sessionId: session.sessionId,
     }),
-    [setSession, pushNotification, session.sessionId]
+    [setSession, session.sessionId]
   )
 
   // Items that have at least one fingerprint/readout
@@ -129,12 +144,43 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
     }
   };
 
+  // Second fetch for enrichment analysis for results
+  const fetchEnrichmentForResults = React.useCallback(
+    async (result: QueryResult) => {
+      if (!result.rows || result.rows.length === 0) return;
+
+      try {
+        setEnrichmentLoading(true);
+        setEnrichmentError(null);
+
+        // Get selected fingerprint data
+        const selectedItem = session.items?.find((item) => item.id === selectedItemId);
+        const selectedFingerprint = selectedItem?.fingerprints?.find((fp) => fp.id === selectedFingerprintId);
+        if (!selectedFingerprint || !selectedFingerprint) {
+          setEnrichmentError("Selected readout data not found.");
+          return;
+        }
+
+        const fingerprint512 = selectedFingerprint.fingerprint512;
+        
+        const data = await runEnrichment({ fingerprint512, querySettings });
+        setEnrichmentResult(data);
+      } catch (err: any) {
+        setEnrichmentError(err.message || "Failed to run enrichment analysis");
+        pushNotification(`Enrichment analysis failed: ${err.message}`, "error");
+      } finally {
+        setEnrichmentLoading(false);
+      }
+    },
+    [session.sessionId, querySettings]
+  )
+
   // Core fetch function that wires page + pageSize -> limit + offset
-  const fetchResults = React.useCallback(
-    async (model: GridPaginationModel) => {
+  const fetchQueryResults = React.useCallback(
+    async (model: GridPaginationModel): Promise<QueryResult | null> => {
       if (!selectedItemId || !selectedFingerprintId) {
         pushNotification("Select an item and readout to query.", "warning");
-        return;
+        return null;
       }
 
       // Get the selected fingerprint data
@@ -142,11 +188,11 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
       const selectedFingerprint = selectedItem?.fingerprints?.find((fp) => fp.id === selectedFingerprintId);
       if (!selectedFingerprint || !selectedFingerprint) {
         pushNotification("Selected readout data not found.", "error");
-        return;
+        return null;
       }
 
-      setLoading(true);
-      setError(null);
+      setQueryLoading(true);
+      setQueryError(null);
       
       try {
         const limit = model.pageSize;
@@ -156,26 +202,30 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
           name: "cross_modal_retrieval",
           params: {
             fingerprint512: selectedFingerprint.fingerprint512,
+            querySettings,
           },
           paging: { limit, offset },
           order: { column: "score", dir: "desc" },
         });
 
-        setResult(data);
+        setQueryResult(data);
         
         const total =
           (data as any).totalCount ??
           offset + data.rows.length + (data.rows.length === limit ? 1 : 0);
 
         setRowCount(total);
+
+        return data;
       } catch (err: any) {
-        setError(err.message || "Failed to run query.");
+        setQueryError(err.message || "Failed to run query.");
         pushNotification(`Query failed: ${err.message}`, "error");
+        return null;
       } finally {
-        setLoading(false);
+        setQueryLoading(false);
       }
     },
-    [selectedItemId, selectedFingerprintId]
+    [selectedItemId, selectedFingerprintId, querySettings]
   )
 
   // USer clicks "Run query" -> reset to first page and fetch
@@ -185,13 +235,21 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
       pageSize: paginationModel.pageSize,
     };
     setPaginationModel(firstPageModel);
-    fetchResults(firstPageModel);
+    
+    const data = await fetchQueryResults(firstPageModel);
+
+    // Only run enrichment when button is clicked
+    if (data && data.rows && data.rows.length > 0) {
+      void fetchEnrichmentForResults(data);
+    } else {
+      setEnrichmentResult(null);
+    }
   };
 
   // DataGrid pagination event -> fetch that page from backend
   const handlePaginationModelChange = (newModel: GridPaginationModel) => {
     setPaginationModel(newModel);
-    fetchResults(newModel);
+    void fetchQueryResults(newModel);
   }
 
   // Row action handler
@@ -234,15 +292,15 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
         pushNotification(`Import failed: ${msg}`, "error");
       });
     },
-    [importCooldown, pushNotification, deps]
+    [importCooldown, deps]
   )
 
   // Define columns based on result columns
   const columns: GridColDef[] = React.useMemo(() => {
-    if (!result) return [];
+    if (!queryResult) return [];
 
     // return result.columns.map((col) => {
-    const baseColumns: GridColDef[] = result.columns.map((col) => {
+    const baseColumns: GridColDef[] = queryResult.columns.map((col) => {
       const base: GridColDef = {
         field: col,
         headerName: columnNameMap[col] || col,
@@ -289,6 +347,13 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
         }
       }
 
+      // Format score as percentage with 2 decimals
+      if (col === "score") {
+        base.valueFormatter = (v: number) => {
+          return (v * 100).toFixed(2) + "%";
+        }
+      }
+
       return base;
     })
 
@@ -331,16 +396,16 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
     }
 
     return [...baseColumns, actionColumn];
-  }, [result, handleRowAction, importCooldown]);
+  }, [queryResult, handleRowAction, importCooldown]);
 
   // Map result rows to DataGrid rows with unique IDs
   const rows = React.useMemo(() => {
-    if (!result) return [];
-    return result.rows.map((row, idx) => ({
+    if (!queryResult) return [];
+    return queryResult.rows.map((row, idx) => ({
       id: idx,
       ...row,
     }));
-  }, [result]);
+  }, [queryResult]);
 
   return (
     <Box 
@@ -449,10 +514,22 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
             </FormControl>
 
             <Stack direction="row" spacing={1} alignItems="center">
-              <Button variant="contained" onClick={handleRunQuery} disabled={!fingerprintOptions.length || loading}>
+              <Button variant="contained" onClick={handleRunQuery} disabled={!fingerprintOptions.length || queryLoading}>
                 Run query
               </Button>
-              {loading && <CircularProgress size={20} />}
+              <Tooltip title="Adjust query settings" arrow>
+                <SettingsIcon
+                  fontSize="small"
+                  onClick={() => setSettingsDialogOpen(true)}
+                  sx={{
+                    cursor: "pointer",
+                    color: "text.primary",
+                    transform: settingsDialogOpen ? "rotate(180deg)" : "rotate(0deg)",
+                    transition: "transform 0.4s ease",
+                  }}
+                />
+              </Tooltip>
+              {queryLoading && <CircularProgress size={20} />}
             </Stack>
 
             {!fingerprintOptions.length && (
@@ -461,7 +538,7 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
               </Alert>
             )}
 
-            {error && <Alert severity="error">{error}</Alert>}
+            {queryError && <Alert severity="error">{queryError}</Alert>}
           </Stack>
 
         </CardContent>
@@ -473,13 +550,13 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
               <Typography component="h1" variant="subtitle1">
                 Query results
               </Typography>
-              {rows.length === 0 && !loading ? (
+              {rows.length === 0 && !queryLoading ? (
                 <Typography variant="body2">
-                  {result ? "No results returned." : "Run a query to see results."}
+                  {queryResult ? "No results returned." : "Run a query to see results."}
                 </Typography>
               ) : (
                 <DataGrid
-                  loading={loading}
+                  loading={queryLoading}
                   rows={rows}
                   columns={columns}
                   paginationMode="server"
@@ -491,12 +568,10 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
                   getRowId={(row) => row.id}
                   density="compact"
                   localeText={{
-                    noRowsLabel: result ? "No rows returned." : "Run a query to see results.",
+                    noRowsLabel: queryResult ? "No rows returned." : "Run a query to see results.",
                   }}
                   sx={{
-                    // No border radius to align with CardContent
                     borderRadius: 0,
-                    // Make all icon buttons inside the grid "flat"
                     "& .MuiIconButton-root": {
                       backgroundColor: "transparent !important",
                       border: "none !important",
@@ -505,12 +580,14 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
                     "& .MuiIconButton-root:hover": {
                       backgroundColor: "transparent !important",
                     },
-                    // optional: also nuke any outlined/button-style things in the footer/toolbar
                     "& .MuiButtonBase-root": {
                       boxShadow: "none",
                     },
                   }}
                   slotProps={{
+                    basePagination: {
+                      material: { labelDisplayedRows: ({ from, to, count }) => `${from}-${to}` }
+                    },
                     filterPanel: {
                       sx: {
                         "& .MuiInputLabel-root": {
@@ -532,12 +609,97 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
               <Typography component="h1" variant="subtitle1">
                 Enrichment results
               </Typography>
-              <Typography variant="body2">
-                Enrichtment results view is currently unavailable.
-              </Typography>
+              {enrichmentLoading ? (
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <CircularProgress size={20} />
+                  <Typography variant="body2">Running enrichment analysis...</Typography>
+                </Box>
+              ) : enrichmentError ? (
+                <Alert severity="error">{enrichmentError}</Alert>
+              ) : enrichmentResult ? (
+                enrichmentResult.items.length > 0 ? (
+                  <DataGrid
+                    loading={enrichmentLoading}
+                    pageSizeOptions={[10, 25, 50]}
+                    density="compact"
+                    rows={enrichmentResult.items.map((item, idx) => ({
+                      id: item.id,
+                      significant: item.p_value < 0.05,
+                      schema: item.schema,
+                      key: item.key,
+                      value: item.value,
+                      p_value: item.p_value,
+                      adjusted_p_value: item.adjusted_p_value,
+                    }))}
+                    columns={[
+                      { field: "significant", headerName: "Significant", flex: 1, sortable: true, resizable: true,
+                        valueFormatter: (v: boolean) => v ? "Yes" : "No",
+                      },
+                      { field: "schema", headerName: "Schema", flex: 1, sortable: true, resizable: true,
+                        valueFormatter: (v: string) => v.toUpperCase(),
+                      },
+                      { field: "key", headerName: "Key", flex: 1, sortable: true, resizable: true,
+                        valueFormatter: (v: string) => v.toUpperCase(),
+                      },
+                      { field: "value", headerName: "Value", flex: 1, sortable: true, resizable: true,
+                        valueFormatter: (v: string) => v.toUpperCase(),
+                      },
+                      { field: "p_value", headerName: "P-value", flex: 1, sortable: true, resizable: true,
+                        valueFormatter: (v: number) => v.toExponential(3),
+                      },
+                      { field: "adjusted_p_value", headerName: "Adjusted P-value", flex: 1, sortable: true, resizable: true,
+                        valueFormatter: (v: number) => v.toExponential(3),
+                      },
+                    ]}
+                    sx={{
+                      borderRadius: 0,
+                      "& .MuiIconButton-root": {
+                        backgroundColor: "transparent !important",
+                        border: "none !important",
+                        boxShadow: "none",
+                      },
+                      "& .MuiIconButton-root:hover": {
+                        backgroundColor: "transparent !important",
+                      },
+                      "& .MuiButtonBase-root": {
+                        boxShadow: "none",
+                      },
+                    }}
+                    slotProps={{
+                      filterPanel: {
+                        sx: {
+                          "& .MuiInputLabel-root": {
+                            backgroundColor: "background.paper",
+                            paddingLeft: 0.5,
+                            paddingRight: 0.5,
+                          },
+                        },
+                      },
+                    }}
+                    localeText={{
+                      noRowsLabel: "No enrichment results found.",
+                    }}
+                  />
+                ) : (
+                  <Typography variant="body2">
+                    No significant enrichment found among the query results.
+                  </Typography>
+                )
+              ) : (
+                <Typography variant="body2">
+                  Enrichment results will appear here after running a query.
+                </Typography>
+              )}
             </CardContent>
           </Card>
         </Grid>
+
+        <DialogQuerySettings
+          open={settingsDialogOpen}
+          onClose={() => setSettingsDialogOpen(false)}
+          settings={querySettings}
+          handleSettingsChange={setQuerySettings}
+        />
       </Grid>
     </Box>
   )
