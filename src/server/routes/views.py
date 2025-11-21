@@ -7,12 +7,18 @@ import numpy as np
 import umap
 from flask import Blueprint, current_app, request, jsonify
 
-from routes.helpers import hex_to_bits
+from versalign.aligner import setup_aligner
+from versalign.msa import calc_msa
+from versalign.printing import format_alignment
+from versalign.scoring import create_substituion_matrix_dynamically
+
+from routes.helpers import hex_to_bits, get_unique_identifier
 from routes.query import execute_named_query
 
 
 blp_get_embedding_space = Blueprint("get_embedding_space", __name__)
 blp_enrich = Blueprint("enrich", __name__)
+blp_run_msa = Blueprint("run_msa", __name__)
 
 
 def _log_hypergeom_probability(a: int, b: int, c: int, d: int) -> float:
@@ -387,5 +393,129 @@ def run_enrichment() -> tuple[dict[str, str], int]:
         "result": {
             "querySettings": query_settings,
             "items": items,
+        }
+    }), 200
+
+
+def motif_compare(a: dict, b: dict) -> float:
+    """
+    Score function for sequence alignment.
+
+    :param a: first item
+    :param b: second item
+    :return: 1.0 if equal, else 0.0
+    """
+    if isinstance(a, str) or isinstance(b, str): # for gap as "-"
+        if a == b:
+            return 1.0
+        return 0.0
+    if a.get("name") == b.get("name"):
+        return 1.0
+    return 0.0
+
+
+def label_motif (r: dict | str) -> str:
+    """
+    Label function for sequence alignment.
+
+    :param r: item
+    :return: name of the item 
+    """
+    if isinstance(r, str): # for gap as "-"
+        return r
+    return r.get("name")
+
+
+@blp_run_msa.post("/api/runMsa")
+def run_msa() -> tuple[dict[str, str], int]:
+    """
+    Handle POST requests to run multiple sequence alignment (MSA).
+
+    :return: a tuple containing an empty dictionary and HTTP status code 200
+    """
+    payload = request.get_json(force=True) or {}
+
+    primary_sequences = payload.get("primarySequences", [])
+    center_id = payload.get("centerId", None)
+
+    # Determine index of center sequence if provided
+    center_id_index = None
+    if center_id is not None:
+        for i, seq in enumerate(primary_sequences):
+            if seq.get("id") == center_id:
+                center_id_index = i
+                break
+
+    current_app.logger.info(f"run_msa called: primary_sequences_count={len(primary_sequences)} center_id_index={center_id_index}")
+
+    if not primary_sequences:
+        current_app.logger.warning("run_msa: missing primarySequences")
+        return jsonify({"error": "Missing primarySequences"}), 400
+    
+    t0 = time.time()
+
+    try:
+        gap_symbol = "-"  # representation of gap in alignment
+
+        # Remove current gaps from sequences; in-place modification
+        for seq in primary_sequences:
+            seq["sequence"] = [x for x in seq["sequence"] if not x["id"].startswith("pad-")]
+
+        # Gather unique set of motifs
+        curr_motif_names = set()
+        motifs = [gap_symbol]  # gap symbol
+        for seq in primary_sequences:
+            for motif in seq["sequence"]:
+                if motif["name"] not in curr_motif_names:
+                    curr_motif_names.add(motif["name"])
+                    motifs.append(motif)
+
+        # Construct substitution matrix
+        sm, _ = create_substituion_matrix_dynamically(motifs, compare=motif_compare, label_fn=label_motif)
+
+        # Setup aligner
+        aligner = setup_aligner(sm, "global", label_fn=label_motif)
+
+        # Multiple sequence alignment
+        seqs = [seq["sequence"] for seq in primary_sequences]
+        lbls = [seq["id"] for seq in primary_sequences]
+        msa, order = calc_msa(aligner, seqs, gap_repr=gap_symbol, center_star=center_id_index)
+        
+        # Replace old sequences with aligned sequences; in-place modification
+        aligned_sequences = []
+        for i, aligned_seq in zip(order, msa):
+            seq = primary_sequences[i]
+            seq["sequence"] = []
+            for motif in aligned_seq:
+                if motif == gap_symbol:
+                    seq["sequence"].append({
+                        "id": f"pad-{get_unique_identifier()}",
+                        "name": None,
+                        "displayName": None,
+                        "smiles": None,
+                    })
+                else:
+                    seq["sequence"].append({
+                        "id": get_unique_identifier(),
+                        "name": motif,
+                        "displayName": None,
+                        "smiles": None,
+                    })
+            aligned_sequences.append(seq)
+
+    except Exception as e:
+        current_app.logger.error(f"run_msa: error preparing substitution matrix: {e}")
+        return jsonify({"error": "Error preparing substitution matrix"}), 500
+
+    elapsed = int((time.time() - t0) * 1000)
+
+    current_app.logger.info(f"run_msa: finished primary_sequences_count={len(primary_sequences)} elapsed_ms={elapsed} center_id_index={center_id_index}")
+
+    return jsonify({
+        "ok": True,
+        "status": "done",
+        "elapsed_ms": elapsed,
+        "result": {
+            "alignedSequences": aligned_sequences,
         }
     }), 200

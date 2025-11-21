@@ -204,7 +204,7 @@ export const ViewEmbeddingSpace: React.FC<ViewEmbeddingSpaceProps> = ({
   }, [points]);
 
   return (
-    <Box>
+    <Box sx={{ pt: 2 }}>
       {loading ? (
         <Box
           sx={{
@@ -246,8 +246,6 @@ export const ViewEmbeddingSpace: React.FC<ViewEmbeddingSpaceProps> = ({
                         : point.name;
                     },
                   }))}
-                  // xAxis={[{ disableLine: true, disableTicks: true }]}
-                  // yAxis={[{ disableLine: true, disableTicks: true }]}
                   xAxis={[{
                     label: "Dimension 1",
                     disableLine: false,

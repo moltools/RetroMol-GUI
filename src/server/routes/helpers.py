@@ -1,6 +1,8 @@
 """Module providing helper functions for endpoints."""
 
 import uuid
+from typing import Any
+
 import numpy as np
 
 
@@ -48,3 +50,27 @@ def hex_to_bits(hexstr: str) -> np.ndarray:
     bit_int = int(hexstr, 16)
     bitstring = bin(bit_int)[2:].zfill(512)  # binary string of length 512
     return np.array([int(b) for b in bitstring], dtype=np.int8)
+
+
+def kmerize_sequence(sequence: list[Any], k: int) -> list[list[Any]]:
+    """
+    Generate k-mers from a given sequence (forward and backward).
+    
+    :param sequence: list of elements (e.g., amino acids)
+    :param k: length of each k-mer
+    :return: list of k-mer strings
+    """
+    kmers = []
+    seq_length = len(sequence)
+    
+    # Forward k-mers
+    for i in range(seq_length - k + 1):
+        kmer = sequence[i:i + k]
+        kmers.append(kmer)
+    
+    # Backward k-mers
+    for i in range(seq_length - k, -1, -1):
+        kmer = sequence[i:i + k]
+        kmers.append(kmer)
+    
+    return kmers

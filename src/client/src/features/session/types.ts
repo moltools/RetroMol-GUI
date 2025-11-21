@@ -8,6 +8,23 @@ export const BaseItemSchema = z.object({
   updatedAt: z.number().nonnegative().default(() => Date.now()),
 })
 
+export const PrimarySequenceMotifSchema = z.object({
+  id: z.string(),
+  name: z.string().nullable().optional(),
+  displayName: z.string().nullable().optional(),
+  smiles: z.string().nullable().optional(),
+})
+
+export type PrimarySequenceMotif = z.output<typeof PrimarySequenceMotifSchema>;
+
+export const PrimarySequenceSchema = z.object({
+  id: z.string(),
+  name: z.string().nullable().optional(),
+  sequence: z.array(PrimarySequenceMotifSchema).min(1),
+})
+
+export type PrimarySequence = z.output<typeof PrimarySequenceSchema>;
+
 export const BaseFingerprintSchema = z.object({
   id: z.string(),
   fingerprint512: z.string().length(128),
@@ -21,12 +38,14 @@ export const CompoundItemSchema = BaseItemSchema.extend({
   kind: z.literal("compound"),
   smiles: z.string(),
   fingerprints: z.array(CompoundFingerprintSchema).default([]),
+  primarySequences: z.array(PrimarySequenceSchema).default([]),
 })
 
 export const GeneClusterSchema = BaseItemSchema.extend({
   kind: z.literal("gene_cluster"),
   fileContent: z.string(),
   fingerprints: z.array(GeneClusterFingerprintSchema).default([]),
+  primarySequences: z.array(PrimarySequenceSchema).default([]),
 })
 
 export const SessionItemSchema = z.discriminatedUnion("kind", [

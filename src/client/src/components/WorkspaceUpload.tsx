@@ -276,7 +276,7 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
 
       <DialogViewItem
         open={openView}
-        itemId={viewingItemId}
+        item={session.items.find(item => item.id === viewingItemId) ?? null}
         onClose={() => {
           setOpenView(false);
           setViewingItemId(null);

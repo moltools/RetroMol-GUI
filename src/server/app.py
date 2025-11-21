@@ -21,6 +21,7 @@ from routes.jobs import (
 from routes.views import (
     blp_get_embedding_space,
     blp_enrich,
+    blp_run_msa,
 )
 
 
@@ -148,3 +149,4 @@ app.register_blueprint(blp_submit_compound)
 app.register_blueprint(blp_submit_gene_cluster)
 app.register_blueprint(blp_get_embedding_space)
 app.register_blueprint(blp_enrich)
+app.register_blueprint(blp_run_msa)

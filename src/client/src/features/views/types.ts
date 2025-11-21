@@ -1,3 +1,4 @@
+import { PrimarySequenceSchema } from "../session/types";
 import { z } from "zod";
 
 export const EmbeddingPointSchema = z.object({
@@ -39,3 +40,11 @@ export type EnrichmentResult = z.infer<typeof EnrichmentResultSchema>;
 // Simple response wrapper
 export const CreateEnrichmentResultRespSchema = z.object({ result: EnrichmentResultSchema });
 export const GetEnrichmentResultRespSchema = z.object({ result: EnrichmentResultSchema })
+
+export const MsaResultSchema = z.object({
+  alignedSequences: z.array(PrimarySequenceSchema),
+})
+
+export type MsaResult = z.infer<typeof MsaResultSchema>;
+
+export const GetMsaResultRespSchema = z.object({ result: MsaResultSchema })
