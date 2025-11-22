@@ -7,11 +7,16 @@ import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
 import ZoomOutIcon from "@mui/icons-material/ZoomOut";
 import ZoomInIcon from "@mui/icons-material/ZoomIn";
+import RefreshIcon from "@mui/icons-material/Refresh";
+import PaletteIcon from "@mui/icons-material/Palette";
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
+import SettingsIcon from "@mui/icons-material/Settings";
 import { useNotifications } from "./NotificationProvider";
 import { Session } from "../features/session/types";
 import { PrimarySequence } from "../features/session/types";
 import { runMsa } from "../features/views/api";
+import { DialogColorPalette } from "./DialogColorPalette";
+import { DialogMsaSettings } from "./DialogMsaSettings";
 
 // Helper: turn a name into a display name by keeping only alphanumerics, capitalizing, and taking up to 3 characters
 const toDisplayName = (name: string | null): string | null => {
@@ -34,18 +39,26 @@ export const ViewMsa: React.FC<ViewMsaProps> = ({
   const [zoom, setZoom] = React.useState(1);
   const handleZoomIn = () => setZoom(z => Math.min(z + 0.1, 3));
   const handleZoomOut = () => setZoom(z => Math.max(z - 0.1, 0.5));
+  const [colorPaletteDialogOpen, setColorPaletteDialogOpen] = React.useState(false);
+  const [msaSettingsDialogOpen, setMsaSettingsDialogOpen] = React.useState(false);
+
+  // palette lives at session.settings.motifColorPalette
+  const handleColorPaletteSave = (newMap: Record<string, string>) => {
+    setSession(prev => ({
+      ...prev,
+      settings: {
+        ...prev.settings,
+        motifColorPalette: newMap,
+      },
+    }));
+    pushNotification("Palette saved", "success");
+  };
 
   const [msa, setMsa] = React.useState<PrimarySequence[] | null>(null);
-  
-  // Which sequence is the center start for alignment
   const [centerId, setCenterId] = React.useState<string | null>(null);
-
-  // Which sequences are hidden (excluded from MSA view + alignment)
-  const [hiddenIds, setHiddenIds] = React.useState<Set<string>>(
-    () => new Set()
-  )
-
+  const [hiddenIds, setHiddenIds] = React.useState<Set<string>>(() => new Set());
   const [aligning, setAligning] = React.useState<boolean>(false);
+  const [isAligned, setIsAligned] = React.useState<boolean>(false);
 
   // Aggregate all primary sequences from session and pad to same length
   React.useEffect(() => {
@@ -58,7 +71,8 @@ export const ViewMsa: React.FC<ViewMsaProps> = ({
         if (ps.sequence.length > 0) {
           sequences.push({
             id: `${item.id}::${ps.id}`,
-            name: `${item.name} (${ps.name})`,
+            // name: `${item.name} (${ps.name})`,
+            name: item.name,
             sequence: ps.sequence
           });
         }
@@ -94,12 +108,10 @@ export const ViewMsa: React.FC<ViewMsaProps> = ({
   }
 
   const visibleRows = msa.filter(row => !hiddenIds.has(row.id as string));
-
   const msaLength = msa[0]?.sequence.length || 0;
   const motifWidth = 50 * zoom;
   const labelWidth = 250;
-  const totalWidth = labelWidth + msaLength * motifWidth;
-  const colTemplate = `${labelWidth}px repeat(${msaLength}, ${motifWidth}px)`;
+  const colTemplate = `${labelWidth}px repeat(${msaLength}, ${motifWidth}px) 1fr`;
 
   const handleHideRow = (id: string) => {
     setHiddenIds(prev => {
@@ -141,6 +153,7 @@ export const ViewMsa: React.FC<ViewMsaProps> = ({
         centerId: centerId,
       });
       setMsa(result.alignedSequences);
+      setIsAligned(true);
       pushNotification("Alignment completed successfully.", "success");
     } catch (error) {
       pushNotification(`An error occurred during alignment: ${error}`, "error"); 
@@ -154,8 +167,10 @@ export const ViewMsa: React.FC<ViewMsaProps> = ({
     <Box sx={{ maxWidth: "100vw", overflowX: "hidden" }}>
       <Stack direction="column" spacing={2}>
         <Typography variant="body1">
-          Click a row label to choose the center sequence.
-          Hidden rows are excluded from alignment.
+          Click a row label to choose the center sequence to align all other sequences against. Press the Align button to perform the alignment.
+          Hidden rows are excluded from alignment, but can be reset using the Reset hidden button.
+          The state of the alignment is saved in the session and can be revisited later.
+          Any manual changes made to the alignment are local and do not affect the readouts for querying.
         </Typography>
         <Stack direction="row" spacing={1} sx={{ justifyContent: "space-between" }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -176,8 +191,41 @@ export const ViewMsa: React.FC<ViewMsaProps> = ({
               onClick={handleResetHidden}
               disabled={hiddenIds.size === 0}
             >
-              {hiddenIds.size > 0 ? `Reset Hidden (${hiddenIds.size})` : "Reset Hidden"}
+              {hiddenIds.size > 0 ? `Reset hidden (${hiddenIds.size})` : "Reset hidden"}
             </Button>
+            <Tooltip title="Adjust MSA settings" arrow>
+              <SettingsIcon
+                fontSize="small"
+                onClick={() => setMsaSettingsDialogOpen(true)}
+                sx={{
+                  cursor: "pointer",
+                  color: "text.primary",
+                  transform: msaSettingsDialogOpen ? "rotate(180deg)" : "rotate(0deg)",
+                  transition: "transform 0.4s ease",
+                }}
+              />
+            </Tooltip>
+            {isAligned ? (
+              <Chip
+                label="Aligned"
+                size="small"
+                color="success"
+                sx={{
+                  height: 20,
+                  fontSize: "0.75rem",
+                }}
+              />
+            ) : (
+              <Chip
+                label="Unaligned"
+                size="small"
+                color="error"
+                sx={{
+                  height: 20,
+                  fontSize: "0.75rem",
+                }}
+              />
+            )}
           </Box>
           {/* Toolbar */}
           <Box
@@ -203,6 +251,18 @@ export const ViewMsa: React.FC<ViewMsaProps> = ({
                   sx={{ cursor: "pointer" }}
                 />
               </Tooltip>
+              <Tooltip title="Reset zoom">
+                <RefreshIcon
+                  onClick={() => setZoom(1)}
+                  sx={{ cursor: "pointer" }}
+                />
+              </Tooltip>
+              <Tooltip title="Change color palette">
+                <PaletteIcon
+                  onClick={() => setColorPaletteDialogOpen(true)}
+                  sx={{ cursor: "pointer" }}
+                />
+              </Tooltip>
             </Box>
           </Box>
         </Stack>
@@ -221,7 +281,7 @@ export const ViewMsa: React.FC<ViewMsaProps> = ({
                 sx={{
                   display: "grid",
                   gridTemplateColumns: colTemplate,
-                  width: `${totalWidth}px`,
+                  width: "100%",
                   gap: 1,
                 }}
               >
@@ -238,7 +298,6 @@ export const ViewMsa: React.FC<ViewMsaProps> = ({
                             p: 0,
                             height: 20,
                             fontWeight: 600,
-                            textAlign: "left",
                             zIndex: 100,
                             cursor: "pointer",
                             display: "flex",
@@ -259,7 +318,7 @@ export const ViewMsa: React.FC<ViewMsaProps> = ({
                         >
                           <Tooltip
                             title={row.name || row.id}
-                            placement="bottom"
+                            placement="top"
                             arrow
                           >
                             <Typography
@@ -272,6 +331,7 @@ export const ViewMsa: React.FC<ViewMsaProps> = ({
                                 textOverflow: "ellipsis",
                                 whiteSpace: "nowrap",
                                 zIndex: 101,
+                                userSelect: "none",
                               }}
                             >
                               {row.name || row.id}
@@ -291,6 +351,7 @@ export const ViewMsa: React.FC<ViewMsaProps> = ({
                                 color="warning"
                                 sx={{
                                   height: 18,
+                                  borderRadius: 0,
                                   fontSize: "0.7rem",
                                 }}
                               />
@@ -324,24 +385,18 @@ export const ViewMsa: React.FC<ViewMsaProps> = ({
                               arrow
                             >
                               <Chip
-                                label={
-                                  toDisplayName(
-                                    motif.displayName ||
-                                      motif.name ||
-                                      null
-                                  ) || "UNK"
-                                }
+                                label={toDisplayName(motif.displayName || motif.name || null) || "UNK"}
                                 size="small"
                                 sx={{
                                   mt: "-4px",
                                   width: motifWidth,
                                   height: 20,
                                   textAlign: "center",
-                                  backgroundColor: "background.paper",
+                                  backgroundColor: session.settings.motifColorPalette[motif.name || ""] || "background.paper",
                                   border: "1px solid",
                                   borderColor: "primary.main",
                                   zIndex: 100,
-                                  fontSize: "0.75rem",
+                                  fontSize: `${Math.max(0.5, Math.min(1.0, zoom)) * 0.75}rem`,
                                   transition:
                                     "background-color 0s ease-in-out",
                                 }}
@@ -377,12 +432,11 @@ export const ViewMsa: React.FC<ViewMsaProps> = ({
                       {/* Row line */}
                       <Box
                         sx={{
-                          gridColumn: "2 / -1", // spans all columns except the first
+                          gridColumn: "1 / -1", // span every column
                           borderBottom: "1px solid",
                           borderColor: "divider",
                           height: 0,
                           mt: "-19px",
-                          ml: "-210px",
                           zIndex: 50,
                         }}
                       />
@@ -398,6 +452,20 @@ export const ViewMsa: React.FC<ViewMsaProps> = ({
           </Typography>
         )}
       </Stack>
+
+      {/* Color palette dialog */}
+      <DialogColorPalette
+        open={colorPaletteDialogOpen}
+        onClose={() => setColorPaletteDialogOpen(false)}
+        colorMap={session.settings.motifColorPalette}
+        onSave={handleColorPaletteSave}
+      />
+
+      {/* MSA settings dialog */}
+      <DialogMsaSettings
+        open={msaSettingsDialogOpen}
+        onClose={() => setMsaSettingsDialogOpen(false)}
+      />
     </Box>
   );
 }

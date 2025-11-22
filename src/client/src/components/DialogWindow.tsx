@@ -47,7 +47,6 @@ export const DialogWindow: React.FC<DialogWindowProps> = ({
   onClose,
   children,
   actions,
-  maxWidth = "sm",
   fullWidth = true,
   dividers = false,
   disableCloseButton = false,
@@ -58,7 +57,7 @@ export const DialogWindow: React.FC<DialogWindowProps> = ({
     <Dialog
       open={open}
       onClose={onClose}
-      maxWidth={maxWidth}
+      maxWidth={"sm"}
       fullWidth={fullWidth}
       PaperProps={PaperProps}
     >

@@ -19,7 +19,6 @@ export const DialogViewItem: React.FC<DialogViewItemProps> = ({
       onClose={onClose}
       title="View item"
       dividers
-      maxWidth="sm"
       actions={[
         { label: "Cancel", variant: "text", color: "inherit", onClick: onClose },
       ]}

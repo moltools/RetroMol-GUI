@@ -2,8 +2,10 @@ import React from "react";
 import Box from "@mui/material/Box";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
-import Grid from "@mui/material/Grid";
 import MuiLink from "@mui/material/Link";
+import Stack from "@mui/material/Stack";
+import Tab from "@mui/material/Tab";
+import Tabs from "@mui/material/Tabs";
 import Typography from "@mui/material/Typography";
 import NotificationsRoundedIcon from "@mui/icons-material/NotificationsRounded";
 import { useTheme } from "@mui/material/styles";
@@ -17,11 +19,11 @@ type WorkspaceExploreProps = {
   setSession: (updated: (prev: Session) => Session) => void;
 }
 
-type ExploreView = "embedding" | "msa";
+type ExploreView = "msa" | "embedding";
 
 export const WorkspaceExplore: React.FC<WorkspaceExploreProps> = ({ session, setSession }) => {
   const theme = useTheme();
-  const [view, setView] = React.useState<ExploreView>("embedding");
+  const [view, setView] = React.useState<ExploreView>("msa");
   // Helper to switch views
   const handleViewChange = (_event: React.SyntheticEvent, newValue: ExploreView) => {
     setView(newValue);
@@ -78,35 +80,54 @@ export const WorkspaceExplore: React.FC<WorkspaceExploreProps> = ({ session, set
           </Typography>
         </CardContent>
       </Card>
-      <Grid container spacing={2} columns={12} alignItems="stretch" sx={{ mb: (theme) => theme.spacing(2) }}>
-        <Grid size={{ xs: 12, md: 7 }} sx={{ display: "flex" }}>
-          <Card
-            variant="outlined"
-            sx={{
-              display: "flex",
-              flexDirection: "column",
-              flexGrow: 1,
-            }}
+      
+      <Card
+        variant="outlined"
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "8px",
+          flexGrow: 1,
+        }}
+      >
+        <CardContent>
+          <Stack>
+            <Typography component="h1" variant="subtitle1">
+              Explore imports
+            </Typography>
+            <Typography variant="body1">
+              Visualize multiple sequence alignments and embedding spaces of biosynthetic fingerprints for items in your
+              workspace. You can switch between the different views using the tabs below.
+            </Typography>
+          </Stack>
+
+          <Tabs
+            value={view}
+            onChange={handleViewChange}
+            textColor="primary"
+            indicatorColor="primary"
+            sx={{ mt: 2, mb: 1 }}
           >
-            <CardContent sx={{ pt: 1.5 }}>
-              <Typography component="h1" variant="subtitle1">
-                Primary sequence multiple sequence alignment
-              </Typography>
-              <ViewMsa session={session} setSession={setSession} />
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid size={{ xs: 12, md: 5 }} sx={{ display: "flex" }}>
-          <Card variant="outlined" sx={{ display: "flex", "flexDirection": "column", flex: 1 }}>
-            <CardContent>
-              <Typography component="h1" variant="subtitle1">
-                Embedding space visualization
-              </Typography>
-              <ViewEmbeddingSpace session={session} setSession={setSession} />
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+            <Tab
+              label="Multiple sequence alignment"
+              value="msa"
+              sx={{ textTransform: "none", fontWeight: view === "msa" ? 600 : 400 }}
+            />
+            <Tab
+              label="Embedding space"
+              value="embedding"
+              sx={{ textTransform: "none", fontWeight: view === "embedding" ? 600 : 400 }}
+            />
+          </Tabs>
+
+          {view === "embedding" && (
+            <ViewEmbeddingSpace session={session} setSession={setSession} />
+          )}
+          {view === "msa" && (
+            <ViewMsa session={session} setSession={setSession} />
+          )}
+        </CardContent>
+      </Card>
     </Box>
   )
 }

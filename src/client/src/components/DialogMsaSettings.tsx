@@ -2,12 +2,12 @@ import React from "react";
 import Box from "@mui/material/Box";
 import { DialogWindow } from "../components/DialogWindow";
 
-type DialogQuerySettingsProps = {
+type DialogMsaSettingsProps = {
   open: boolean;
   onClose: () => void;
 }
 
-export const DialogQuerySettings: React.FC<DialogQuerySettingsProps> = ({
+export const DialogMsaSettings: React.FC<DialogMsaSettingsProps> = ({
   open,
   onClose,
 }) => {
@@ -22,7 +22,7 @@ export const DialogQuerySettings: React.FC<DialogQuerySettingsProps> = ({
       ]}
     >
       <Box display="flex" flexDirection="column" gap={2} py={1}>
-        {/* Intentionally left empty for future query settings */}
+        {/* Intentionally left empty for future MSA settings */}
       </Box>
     </DialogWindow>
   )

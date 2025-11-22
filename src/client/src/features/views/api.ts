@@ -1,5 +1,5 @@
 import { postJson } from "../http";
-import { SessionItem } from "../session/types";
+import { SessionItem, SessionSettings } from "../session/types";
 import {
   EmbeddingPoint,
   GetEmbeddingSpaceRespSchema,
@@ -10,12 +10,17 @@ import {
 import { EnrichmentResult, QuerySettings } from "./types";
 import { PrimarySequence } from "../session/types";
 
-export async function getEmbeddingSpace(sessionId: string, sessionItems: SessionItem[]): Promise<EmbeddingPoint[]> {
+export async function getEmbeddingSpace(
+  sessionId: string,
+  sessionItems: SessionItem[],
+  method: SessionSettings["embeddingVisualizationType"] = "pca"
+): Promise<EmbeddingPoint[]> {
   const data = await postJson(
     "/api/getEmbeddingSpace",
     {
       sessionId: sessionId,
       items: sessionItems,
+      method,
     },
     GetEmbeddingSpaceRespSchema
   )

@@ -4,6 +4,10 @@ import Alert from "@mui/material/Alert";
 import Typography from "@mui/material/Typography";
 import CircularProgress from "@mui/material/CircularProgress";
 import { ScatterChart } from "@mui/x-charts/ScatterChart";
+import Stack from "@mui/material/Stack";
+import ToggleButton from "@mui/material/ToggleButton";
+import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
+import Divider from "@mui/material/Divider";
 import { useNotifications } from "../components/NotificationProvider";
 import { Session, SessionItem } from "../features/session/types";
 import { EmbeddingPoint } from "../features/views/types";
@@ -41,6 +45,8 @@ export const ViewEmbeddingSpace: React.FC<ViewEmbeddingSpaceProps> = ({
     }
     return map;
   }, [session.items]);
+
+  const embeddingMethod = session.settings.embeddingVisualizationType;
 
   // Map child ID -> score for tooltips
   const scoreByChildId = React.useMemo(() => {
@@ -115,7 +121,7 @@ export const ViewEmbeddingSpace: React.FC<ViewEmbeddingSpaceProps> = ({
 
     setLoading(true);
 
-    getEmbeddingSpace(session.sessionId, itemsWithFingerprints)
+    getEmbeddingSpace(session.sessionId, itemsWithFingerprints, embeddingMethod)
       .then((pts) => {
         if (cancelled) return;
         setPoints(pts);
@@ -134,7 +140,7 @@ export const ViewEmbeddingSpace: React.FC<ViewEmbeddingSpaceProps> = ({
     return () => {
       cancelled = true;
     }
-  }, [itemsKey]); // only rerun when itemsKey changes (i.e., notable changes to session items)
+  }, [itemsKey, embeddingMethod]); // rerun when items change or method toggles
 
   // Adjust embedding space size on container resize
   React.useLayoutEffect(() => {
@@ -203,6 +209,17 @@ export const ViewEmbeddingSpace: React.FC<ViewEmbeddingSpaceProps> = ({
     };
   }, [points]);
 
+  const handleEmbeddingToggle = (_: React.MouseEvent<HTMLElement>, next: "pca" | "umap" | null) => {
+    if (!next || next === embeddingMethod) return;
+    setSession((prev) => ({
+      ...prev,
+      settings: {
+        ...prev.settings,
+        embeddingVisualizationType: next,
+      },
+    }));
+  };
+
   return (
     <Box sx={{ pt: 2 }}>
       {loading ? (
@@ -223,7 +240,32 @@ export const ViewEmbeddingSpace: React.FC<ViewEmbeddingSpaceProps> = ({
           </Alert>
         </Box>
       ) : !loading && !error && points && points.length > 0 ? (
-          <Box sx={{ flex: 1, minHeight: 0 }}>
+        <Stack
+          direction={{ xs: "column", md: "row" }}
+          spacing={2}
+          alignItems="stretch"
+        >
+          <Box
+            sx={{
+              flexBasis: { xs: "100%", md: "35%" },
+              flexGrow: 1,
+              minWidth: 240,
+            }}
+          >
+            <Stack direction="row" justifyContent="right" alignItems="center" sx={{ mb: 1 }}>
+              <ToggleButtonGroup
+                value={embeddingMethod}
+                exclusive
+                onChange={handleEmbeddingToggle}
+                size="small"
+                sx={{
+                  height: 30,
+                }}
+              >
+                <ToggleButton value="pca">PCA</ToggleButton>
+                <ToggleButton value="umap">UMAP</ToggleButton>
+              </ToggleButtonGroup>
+            </Stack>
             <Box
               ref={embeddingSpaceContainerRef}
               sx={{ width: "100%" }}
@@ -271,6 +313,32 @@ export const ViewEmbeddingSpace: React.FC<ViewEmbeddingSpaceProps> = ({
               )}
             </Box>
           </Box>
+
+          <Divider flexItem orientation="vertical" sx={{ display: { xs: "none", md: "block" } }} />
+
+          <Box
+            sx={{
+              flexBasis: { xs: "100%", md: "65%" },
+              flexGrow: 2,
+              display: "flex",
+              flexDirection: "column",
+              gap: 1,
+            }}
+          >
+            <Typography component="h1" variant="subtitle1">
+              How to read this plot
+            </Typography>
+            <Typography variant="body2">
+              Each point represents a biosynthetic fingerprint readout. Distances reflect structural similarity in the chosen
+              embedding space (PCA or UMAP). Switch methods to explore how local neighborhoods change with a linear vs.
+              non-linear reduction.
+            </Typography>
+            <Typography variant="body2">
+              Hover a point to see which import it belongs to and its score. Points from compounds and BGCs are grouped
+              separately so mixed datasets stay interpretable.
+            </Typography>
+          </Box>
+        </Stack>
       ) : (
         <Typography variant="body2">
           No embedding points to display.

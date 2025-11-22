@@ -1,3 +1,4 @@
+import { defaultMotifColorMap } from "./utils";
 import { z } from "zod";
 
 export const BaseItemSchema = z.object({
@@ -57,10 +58,22 @@ export type CompoundItem = z.output<typeof CompoundItemSchema>;
 export type GeneClusterItem = z.output<typeof GeneClusterSchema>;
 export type SessionItem = z.output<typeof SessionItemSchema>;
 
+export const SessionSettingsSchema = z.object({
+  // Color palette for motifs in MSA view
+  motifColorPalette: z.record(z.string()).default(() => defaultMotifColorMap()),
+  // Embedding space visualization type is either "pca" or "umap"
+  embeddingVisualizationType: z.enum(["pca", "umap"]).default("pca"),
+  // Similarity threshold for querying in [0, 1] range
+  similarityThreshold: z.number().min(0).max(1).default(0.7),
+});
+
+export type SessionSettings = z.output<typeof SessionSettingsSchema>;
+
 export const SessionSchema = z.object({
-  sessionId: z.string(),
-  created: z.number().nonnegative(),
+  sessionId: z.string().default(() => crypto.randomUUID()),
+  created: z.number().nonnegative().default(() => Date.now()),
   items: z.array(SessionItemSchema).default([]),
+  settings: SessionSettingsSchema.default(() => ({})),
 })
 
 export type Session = z.output<typeof SessionSchema>;
@@ -70,11 +83,6 @@ export const CreateSessionRespSchema = z.object({ sessionId: z.string() });
 export const GetSessionRespSchema = z.object({ session: SessionSchema });
 
 export function initSession(): Session {
-  const newSession = {
-    sessionId: crypto.randomUUID(),
-    created: Date.now(),
-    items: [],
-  } satisfies Session;
-
+  const newSession = SessionSchema.parse({});
   return newSession;
 }

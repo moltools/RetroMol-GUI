@@ -1,10 +1,12 @@
 """Module for handling view requests."""
 
 import math
+import re
 import time
 
 import numpy as np
 import umap
+from sklearn.decomposition import PCA
 from flask import Blueprint, current_app, request, jsonify
 
 from versalign.aligner import setup_aligner
@@ -91,6 +93,7 @@ def get_embedding_space() -> tuple[dict[str, str], int]:
 
     session_id = payload.get("sessionId")
     items = payload.get("items", [])
+    method = (payload.get("method") or "umap").lower()
 
     current_app.logger.info(f"get_embedding_space called: session_id={session_id} items_count={len(items)}")
 
@@ -141,7 +144,7 @@ def get_embedding_space() -> tuple[dict[str, str], int]:
                 bits_to_keep = np.any(gene_cluster_fps, axis=0)
                 fps = fps[:, bits_to_keep]
 
-            # Reduce dimensionality using UMAP
+            # Reduce dimensionality using selected method
             n_samples = fps.shape[0]
             if n_samples == 1:
                 # Single point: put it at the origin (jitter will be applied later so might not be exactly at origin)
@@ -152,15 +155,20 @@ def get_embedding_space() -> tuple[dict[str, str], int]:
                 angles = np.linspace(0, 2 * np.pi, n_samples, endpoint=False)
                 reduced = np.stack([np.cos(angles), np.sin(angles)], axis=1)
             else:
-                # UMAP requires num_neighbors < num_samples
-                n_neighbors = min(15, n_samples - 1)
-                reducer = umap.UMAP(
-                    n_components=2,
-                    n_neighbors=n_neighbors,
-                    random_state=42,
-                    metric="cosine"
-                )
-                reduced = reducer.fit_transform(fps)
+                if method == "pca":
+                    # PCA
+                    pca = PCA(n_components=2, random_state=42)
+                    reduced = pca.fit_transform(fps)
+                else:
+                    # Default to UMAP
+                    n_neighbors = min(15, n_samples - 1)
+                    reducer = umap.UMAP(
+                        n_components=2,
+                        n_neighbors=n_neighbors,
+                        random_state=42,
+                        metric="cosine"
+                    )
+                    reduced = reducer.fit_transform(fps)
 
             points = [
                 {
@@ -407,10 +415,19 @@ def motif_compare(a: dict, b: dict) -> float:
     """
     if isinstance(a, str) or isinstance(b, str): # for gap as "-"
         if a == b:
-            return 1.0
+            return 2.0
         return 0.0
-    if a.get("name") == b.get("name"):
-        return 1.0
+    name_a = a.get("name")
+    name_b = b.get("name")
+    if name_a == name_b:
+        return 2.0
+    # Names "A", "B", "C", "D" should match with any "A" + digit etc.
+    if name_a and name_b:
+        pattern_a = re.escape(name_a) + r"\d*$"
+        pattern_b = re.escape(name_b) + r"\d*$"
+        if re.match(pattern_a, name_b) or re.match(pattern_b, name_a):
+            return 2.0
+
     return 0.0
 
 

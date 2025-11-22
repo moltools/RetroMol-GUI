@@ -104,7 +104,6 @@ export const DialogImportCompound: React.FC<DialogImportCompoundProps> = ({
       onClose={onClose}
       title="Import compounds"
       dividers
-      maxWidth="sm"
       actions={[
         { label: "Cancel", variant: "text", color: "inherit", onClick: () => onClose() },
         { label: "Clear", variant: "contained", color: "secondary", onClick: reset },

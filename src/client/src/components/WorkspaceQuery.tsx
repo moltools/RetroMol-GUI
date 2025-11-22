@@ -12,6 +12,8 @@ import MenuItem from "@mui/material/MenuItem";
 import Select from "@mui/material/Select";
 import FormControl from "@mui/material/FormControl";
 import InputLabel from "@mui/material/InputLabel";
+import TextField from "@mui/material/TextField";
+import InputAdornment from "@mui/material/InputAdornment";
 import Stack from "@mui/material/Stack";
 import CircularProgress from "@mui/material/CircularProgress";
 import Alert from "@mui/material/Alert";
@@ -29,7 +31,6 @@ import { runEnrichment } from "../features/views/api";
 import type { EnrichmentResult } from "../features/views/types";
 import { ItemKindChip } from "./ItemKindChip";
 import { importCompoundById } from "../features/jobs/api";
-import type { QuerySettings } from "../features/views/types";
 import { DialogQuerySettings } from "./DialogQuerySettings";
 
 interface WorkspaceQueryProps {
@@ -64,9 +65,6 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
   const { pushNotification } = useNotifications();
 
   const [settingsDialogOpen, setSettingsDialogOpen] = React.useState(false);
-  const [querySettings, setQuerySettings] = React.useState<QuerySettings>({
-    scoreThreshold: 0.7,
-  });
 
   const [queryLoading, setQueryLoading] = React.useState(false);
   const [queryError, setQueryError] = React.useState<string | null>(null);
@@ -104,6 +102,18 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
   const itemsWithFingerprints = React.useMemo(() => {
     return (session.items || []).filter((item) => item.fingerprints && item.fingerprints.length > 0);
   }, [session.items]);
+
+  const similarityThreshold = session.settings.similarityThreshold ?? 0.7;
+  const [thresholdInput, setThresholdInput] = React.useState<string>(() => Math.round(similarityThreshold * 100).toString());
+
+  React.useEffect(() => {
+    setThresholdInput(Math.round(similarityThreshold * 100).toString());
+  }, [similarityThreshold]);
+
+  const querySettings = React.useMemo(
+    () => ({ scoreThreshold: similarityThreshold }),
+    [similarityThreshold]
+  );
 
   // Flatten fingerprints for selection list
   const fingerprintOptions = React.useMemo(() => {
@@ -150,6 +160,20 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
     }
   };
 
+  const handleThresholdChange = (value: string) => {
+    setThresholdInput(value);
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return;
+    const clamped = Math.min(100, Math.max(0, numeric));
+    setSession((prev) => ({
+      ...prev,
+      settings: {
+        ...prev.settings,
+        similarityThreshold: clamped / 100,
+      },
+    }));
+  };
+
   // Second fetch for enrichment analysis for results
   const fetchEnrichmentForResults = React.useCallback(
     async (result: QueryResult) => {
@@ -178,7 +202,7 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
         setEnrichmentLoading(false);
       }
     },
-    [session.sessionId, querySettings]
+    [session.items, selectedItemId, selectedFingerprintId, querySettings, pushNotification]
   )
 
   // Core fetch function that wires page + pageSize -> limit + offset
@@ -231,7 +255,7 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
         setQueryLoading(false);
       }
     },
-    [selectedItemId, selectedFingerprintId, querySettings]
+    [selectedItemId, selectedFingerprintId, querySettings, session.items, pushNotification]
   )
 
   // USer clicks "Run query" -> reset to first page and fetch
@@ -519,6 +543,19 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
               </Select>
             </FormControl>
 
+            <TextField
+              size="small"
+              type="number"
+              value={thresholdInput}
+              onChange={(e) => handleThresholdChange(e.target.value)}
+              inputProps={{ min: 0, max: 100, step: 1 }}
+              InputProps={{
+                endAdornment: <InputAdornment position="end">%</InputAdornment>,
+              }}
+              helperText="Minimum similarity for hits (0-100%)"
+              disabled={!fingerprintOptions.length}
+            />
+
             <Stack direction="row" spacing={1} alignItems="center">
               <Button variant="contained" onClick={handleRunQuery} disabled={!fingerprintOptions.length || queryLoading}>
                 Run query
@@ -703,14 +740,12 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
             </CardContent>
           </Card>
         </Grid>
-
-        <DialogQuerySettings
-          open={settingsDialogOpen}
-          onClose={() => setSettingsDialogOpen(false)}
-          settings={querySettings}
-          handleSettingsChange={setQuerySettings}
-        />
       </Grid>
+
+      <DialogQuerySettings
+        open={settingsDialogOpen}
+        onClose={() => setSettingsDialogOpen(false)}
+      />
     </Box>
   )
 }

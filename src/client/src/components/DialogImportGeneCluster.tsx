@@ -32,7 +32,6 @@ export const DialogImportGeneCluster: React.FC<DialogImportGeneClusterProps> = (
       onClose={onClose}
       title="Import gene clusters"
       dividers
-      maxWidth="sm"
       actions={[
         { label: "Cancel", variant: "text", color: "inherit", onClick: onClose },
         { label: "Clear", variant: "contained", color: "secondary", onClick: reset },
