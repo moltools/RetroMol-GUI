@@ -24,7 +24,7 @@ import SettingsIcon from "@mui/icons-material/Settings";
 import { useTheme } from "@mui/material/styles";
 import { Link as RouterLink } from "react-router-dom";
 import { useNotifications } from "../components/NotificationProvider";
-import { Session, SessionItem } from "../features/session/types";
+import { Session, SessionItem, QuerySettings } from "../features/session/types";
 import { runQuery } from "../features/query/api";
 import type { QueryResult } from "../features/query/types";
 import { runEnrichment } from "../features/views/api";
@@ -103,7 +103,7 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
     return (session.items || []).filter((item) => item.fingerprints && item.fingerprints.length > 0);
   }, [session.items]);
 
-  const similarityThreshold = session.settings.similarityThreshold ?? 0.7;
+  const similarityThreshold = session.settings.querySettings?.similarityThreshold ?? 0.7;
   const [thresholdInput, setThresholdInput] = React.useState<string>(() => Math.round(similarityThreshold * 100).toString());
 
   React.useEffect(() => {
@@ -111,7 +111,7 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
   }, [similarityThreshold]);
 
   const querySettings = React.useMemo(
-    () => ({ scoreThreshold: similarityThreshold }),
+    () => ({ similarityThreshold }),
     [similarityThreshold]
   );
 
@@ -169,7 +169,20 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
       ...prev,
       settings: {
         ...prev.settings,
-        similarityThreshold: clamped / 100,
+        querySettings: {
+          ...prev.settings.querySettings,
+          similarityThreshold: clamped / 100,
+        },
+      },
+    }));
+  };
+
+  const handleQuerySettingsSave = (newSettings: QuerySettings) => {
+    setSession((prev) => ({
+      ...prev,
+      settings: {
+        ...prev.settings,
+        querySettings: newSettings,
       },
     }));
   };
@@ -193,7 +206,10 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
 
         const fingerprint512 = selectedFingerprint.fingerprint512;
         
-        const data = await runEnrichment({ fingerprint512, querySettings });
+        const data = await runEnrichment({
+          fingerprint512,
+          querySettings: session.settings.querySettings
+        });
         setEnrichmentResult(data);
       } catch (err: any) {
         setEnrichmentError(err.message || "Failed to run enrichment analysis");
@@ -255,7 +271,7 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
         setQueryLoading(false);
       }
     },
-    [selectedItemId, selectedFingerprintId, querySettings, session.items, pushNotification]
+    [selectedItemId, selectedFingerprintId, session.items]
   )
 
   // USer clicks "Run query" -> reset to first page and fetch
@@ -745,6 +761,8 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
       <DialogQuerySettings
         open={settingsDialogOpen}
         onClose={() => setSettingsDialogOpen(false)}
+        settings={session.settings.querySettings}
+        onSave={handleQuerySettingsSave}
       />
     </Box>
   )

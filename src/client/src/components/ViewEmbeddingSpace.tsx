@@ -9,7 +9,7 @@ import ToggleButton from "@mui/material/ToggleButton";
 import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import Divider from "@mui/material/Divider";
 import { useNotifications } from "../components/NotificationProvider";
-import { Session, SessionItem } from "../features/session/types";
+import { EmbeddingVisualizationType, Session, SessionItem } from "../features/session/types";
 import { EmbeddingPoint } from "../features/views/types";
 import { getEmbeddingSpace } from "../features/views/api";
 
@@ -209,7 +209,7 @@ export const ViewEmbeddingSpace: React.FC<ViewEmbeddingSpaceProps> = ({
     };
   }, [points]);
 
-  const handleEmbeddingToggle = (_: React.MouseEvent<HTMLElement>, next: "pca" | "umap" | null) => {
+  const handleEmbeddingToggle = (_: React.MouseEvent<HTMLElement>, next: EmbeddingVisualizationType) => {
     if (!next || next === embeddingMethod) return;
     setSession((prev) => ({
       ...prev,

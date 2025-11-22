@@ -1,7 +1,6 @@
 import React from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import Chip from "@mui/material/Chip";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -133,26 +132,12 @@ export const DialogColorPalette: React.FC<DialogColorPaletteProps> = ({
     onClose();
   }
 
-  const title = (
-    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-      Color palette
-      {dirty && (
-        <Chip
-          label="Unsaved changes"
-          size="small"
-          color="warning"
-          variant="outlined"
-          sx={{ height: 20, fontSize: "0.7rem" }}
-        />
-      )}
-    </Box>
-  );
-
   return (
     <DialogWindow
       open={open}
-      title={title}
+      title="Color palette"
       onClose={handleCancel}
+      dirty={dirty}
       dividers
       actions={[
         { label: "Cancel", variant: "text", color: "inherit", onClick: handleCancel },
@@ -209,11 +194,13 @@ export const DialogColorPalette: React.FC<DialogColorPaletteProps> = ({
               alignItems: "center",
               gap: 1,
               mb: 1,
+              pr: 3,
             }}
           >
             <TextField
               value={key}
               onChange={(e) => handleKeyChange(id, e.target.value)}
+              sx={{ flexGrow: 1 }} // fill up available space
             />
             <TextField
               type="text"

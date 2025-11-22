@@ -5,6 +5,7 @@ import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import IconButton from "@mui/material/IconButton";
+import Chip from "@mui/material/Chip";
 import Button, { ButtonProps } from "@mui/material/Button";
 import CloseIcon from "@mui/icons-material/Close";
 import type { DialogProps } from "@mui/material/Dialog";
@@ -39,6 +40,10 @@ export interface DialogWindowProps {
   disableCloseButton?: boolean;
   ContentProps?: Partial<DialogContentProps>;
   PaperProps?: DialogProps["PaperProps"];
+
+  /** Optional dirty state badge shown next to the title */
+  dirty?: boolean;
+  dirtyLabel?: string;
 }
 
 export const DialogWindow: React.FC<DialogWindowProps> = ({
@@ -52,7 +57,28 @@ export const DialogWindow: React.FC<DialogWindowProps> = ({
   disableCloseButton = false,
   ContentProps,
   PaperProps,
+  dirty = false,
+  dirtyLabel = "Unsaved changes",
 }) => {
+  const renderTitle = () => {
+    if (!title && !dirty) return null;
+
+    return (
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+        {title}
+        {dirty && (
+          <Chip
+            label={dirtyLabel}
+            size="small"
+            color="warning"
+            variant="outlined"
+            sx={{ height: 20, fontSize: "0.7rem" }}
+          />
+        )}
+      </Box>
+    );
+  };
+
   return (
     <Dialog
       open={open}
@@ -63,7 +89,7 @@ export const DialogWindow: React.FC<DialogWindowProps> = ({
     >
       {(title || !disableCloseButton) && (
         <DialogTitle sx={{ pr: disableCloseButton ? 3 : 6 }}>
-          {title}
+          {renderTitle()}
           {!disableCloseButton && (
             <Box
               onClick={(e) => onClose(e as any, "escapeKeyDown")}

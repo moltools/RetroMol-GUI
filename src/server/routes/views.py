@@ -454,6 +454,7 @@ def run_msa() -> tuple[dict[str, str], int]:
 
     primary_sequences = payload.get("primarySequences", [])
     center_id = payload.get("centerId", None)
+    settings = payload.get("msaSettings", {})
 
     # Determine index of center sequence if provided
     center_id_index = None
@@ -491,7 +492,8 @@ def run_msa() -> tuple[dict[str, str], int]:
         sm, _ = create_substituion_matrix_dynamically(motifs, compare=motif_compare, label_fn=label_motif)
 
         # Setup aligner
-        aligner = setup_aligner(sm, "global", label_fn=label_motif)
+        alignment_type = settings.get("alignmentType", "global").lower()
+        aligner = setup_aligner(sm, alignment_type, label_fn=label_motif)
 
         # Multiple sequence alignment
         seqs = [seq["sequence"] for seq in primary_sequences]

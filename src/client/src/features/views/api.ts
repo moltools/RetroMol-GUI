@@ -1,5 +1,5 @@
 import { postJson } from "../http";
-import { SessionItem, SessionSettings } from "../session/types";
+import { MsaSettings, SessionItem, SessionSettings } from "../session/types";
 import {
   EmbeddingPoint,
   GetEmbeddingSpaceRespSchema,
@@ -7,7 +7,8 @@ import {
   GetMsaResultRespSchema,
   MsaResult
 } from "./types";
-import { EnrichmentResult, QuerySettings } from "./types";
+import { EnrichmentResult } from "./types";
+import { QuerySettings } from "../session/types";
 import { PrimarySequence } from "../session/types";
 
 export async function getEmbeddingSpace(
@@ -42,15 +43,17 @@ export async function runEnrichment({ fingerprint512, querySettings }: {
   return data.result;
 }
 
-export async function runMsa({ primarySequences, centerId }: {
+export async function runMsa({ primarySequences, centerId, msaSettings }: {
   primarySequences: PrimarySequence[];
   centerId?: string;
+  msaSettings?: MsaSettings;
 }): Promise<MsaResult> {
   const data = await postJson(
     "/api/runMsa",
     {
       primarySequences,
       centerId,
+      msaSettings,
     },
     GetMsaResultRespSchema
   )

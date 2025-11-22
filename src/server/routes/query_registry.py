@@ -17,10 +17,10 @@ def preprocess_cross_modal_params(typed: dict) -> dict:
     fp = hex_to_bits(fp_hex_string)
     fp = [float(x) for x in fp]
     typed["qv"] = Vector(fp)
-
-    score_threshold = typed.get("querySettings", {}).get("scoreThreshold", 0.0)
-    print(score_threshold)
-    typed["score_threshold"] = score_threshold
+    
+    query_settings = typed.get("querySettings", {})
+    similarity_threshold = query_settings.get("similarityThreshold", 0.0)
+    typed["similarity_threshold"] = similarity_threshold
 
     return typed
 
@@ -97,7 +97,7 @@ QUERIES = {
             ON cr.compound_id = c.id
             WHERE vector_norm(rf.fp_retro_b512_vec_binary) > 0
             AND vector_norm(%(qv)s) > 0
-            AND (1.0 - (rf.fp_retro_b512_vec_binary <=> %(qv)s)) >= %(score_threshold)s
+            AND (1.0 - (rf.fp_retro_b512_vec_binary <=> %(qv)s)) >= %(similarity_threshold)s
             ORDER BY {order_col} {order_dir}
         """,
         "allowed_order_cols": {"identifier", "name", "source", "ext_id", "score"},

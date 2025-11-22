@@ -12,7 +12,7 @@ import PaletteIcon from "@mui/icons-material/Palette";
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
 import SettingsIcon from "@mui/icons-material/Settings";
 import { useNotifications } from "./NotificationProvider";
-import { Session } from "../features/session/types";
+import { Session, MsaSettings } from "../features/session/types";
 import { PrimarySequence } from "../features/session/types";
 import { runMsa } from "../features/views/api";
 import { DialogColorPalette } from "./DialogColorPalette";
@@ -42,7 +42,6 @@ export const ViewMsa: React.FC<ViewMsaProps> = ({
   const [colorPaletteDialogOpen, setColorPaletteDialogOpen] = React.useState(false);
   const [msaSettingsDialogOpen, setMsaSettingsDialogOpen] = React.useState(false);
 
-  // palette lives at session.settings.motifColorPalette
   const handleColorPaletteSave = (newMap: Record<string, string>) => {
     setSession(prev => ({
       ...prev,
@@ -53,6 +52,17 @@ export const ViewMsa: React.FC<ViewMsaProps> = ({
     }));
     pushNotification("Palette saved", "success");
   };
+
+  const handleMsaSettingsSave = (newSettings: MsaSettings) => {
+    setSession(prev => ({
+      ...prev,
+      settings: {
+        ...prev.settings,
+        msaSettings: newSettings,
+      },
+    }));
+    pushNotification("MSA settings saved", "success");
+  }
 
   const [msa, setMsa] = React.useState<PrimarySequence[] | null>(null);
   const [centerId, setCenterId] = React.useState<string | null>(null);
@@ -151,6 +161,7 @@ export const ViewMsa: React.FC<ViewMsaProps> = ({
       const result = await runMsa({
         primarySequences: currentVisible,
         centerId: centerId,
+        msaSettings: session.settings.msaSettings,
       });
       setMsa(result.alignedSequences);
       setIsAligned(true);
@@ -167,8 +178,8 @@ export const ViewMsa: React.FC<ViewMsaProps> = ({
     <Box sx={{ maxWidth: "100vw", overflowX: "hidden" }}>
       <Stack direction="column" spacing={2}>
         <Typography variant="body1">
-          Click a row label to choose the center sequence to align all other sequences against. Press the Align button to perform the alignment.
-          Hidden rows are excluded from alignment, but can be reset using the Reset hidden button.
+          Click a row label to choose the center sequence to align all other sequences against. Press the <strong>Align</strong> button to perform the alignment.
+          Hidden rows are excluded from alignment, but can be reset using the <strong>Reset hidden</strong> button.
           The state of the alignment is saved in the session and can be revisited later.
           Any manual changes made to the alignment are local and do not affect the readouts for querying.
         </Typography>
@@ -465,6 +476,8 @@ export const ViewMsa: React.FC<ViewMsaProps> = ({
       <DialogMsaSettings
         open={msaSettingsDialogOpen}
         onClose={() => setMsaSettingsDialogOpen(false)}
+        settings={session.settings.msaSettings}
+        onSave={handleMsaSettingsSave}
       />
     </Box>
   );

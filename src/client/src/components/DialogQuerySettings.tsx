@@ -1,15 +1,20 @@
 import React from "react";
 import Box from "@mui/material/Box";
 import { DialogWindow } from "../components/DialogWindow";
+import { QuerySettings } from "../features/session/types";
 
 type DialogQuerySettingsProps = {
   open: boolean;
   onClose: () => void;
+  settings: QuerySettings;
+  onSave: (newSettings: QuerySettings) => void;
 }
 
 export const DialogQuerySettings: React.FC<DialogQuerySettingsProps> = ({
   open,
   onClose,
+  settings,
+  onSave,
 }) => {
   return (
     <DialogWindow

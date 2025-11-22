@@ -13,12 +13,6 @@ export const GetEmbeddingSpaceRespSchema = z.object({ points: z.array(EmbeddingP
 
 export type EmbeddingPoint = z.output<typeof EmbeddingPointSchema>;
 
-const QuerySettingsSchema = z.object({
-  scoreThreshold: z.number().min(0).max(1),
-})
-
-export type QuerySettings = z.infer<typeof QuerySettingsSchema>;
-
 const EnrichmentItemSchema = z.object({
   id: z.string(),
   schema: z.string(),
@@ -32,7 +26,6 @@ export type EnrichmentItem = z.infer<typeof EnrichmentItemSchema>;
   
 export const EnrichmentResultSchema = z.object({
   items: z.array(EnrichmentItemSchema),
-  querySettings: QuerySettingsSchema,
 })
 
 export type EnrichmentResult = z.infer<typeof EnrichmentResultSchema>;

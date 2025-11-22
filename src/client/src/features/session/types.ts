@@ -58,13 +58,35 @@ export type CompoundItem = z.output<typeof CompoundItemSchema>;
 export type GeneClusterItem = z.output<typeof GeneClusterSchema>;
 export type SessionItem = z.output<typeof SessionItemSchema>;
 
-export const SessionSettingsSchema = z.object({
-  // Color palette for motifs in MSA view
-  motifColorPalette: z.record(z.string()).default(() => defaultMotifColorMap()),
-  // Embedding space visualization type is either "pca" or "umap"
-  embeddingVisualizationType: z.enum(["pca", "umap"]).default("pca"),
-  // Similarity threshold for querying in [0, 1] range
+export const AlignmentTypeSchema = z.enum(["global", "local"]);
+export const EmbeddingVisualizationTypeSchema = z.enum(["pca", "umap"]);
+export const QuerySearchSpaceSchema = z.enum(["only_compounds", "only_gene_clusters", "both"]);
+export const AnnotationFilterSchema = z.object({scheme: z.string(), key: z.string(),  value: z.string()});
+
+export type AlignmentType = z.output<typeof AlignmentTypeSchema>;
+export type EmbeddingVisualizationType = z.output<typeof EmbeddingVisualizationTypeSchema>;
+export type QuerySearchSpace = z.output<typeof QuerySearchSpaceSchema>;
+export type AnnotationFilter = z.output<typeof AnnotationFilterSchema>;
+
+export const MsaSettingsSchema = z.object({
+  alignmentType: AlignmentTypeSchema.default("global"),
+});
+
+export type MsaSettings = z.output<typeof MsaSettingsSchema>;
+
+export const QuerySettingsSchema = z.object({
   similarityThreshold: z.number().min(0).max(1).default(0.7),
+  searchSpace: QuerySearchSpaceSchema.default("both"),
+  annotationFilters: z.array(AnnotationFilterSchema).default([]),
+});
+
+export type QuerySettings = z.output<typeof QuerySettingsSchema>;
+
+export const SessionSettingsSchema = z.object({
+  motifColorPalette: z.record(z.string()).default(() => defaultMotifColorMap()),
+  embeddingVisualizationType: EmbeddingVisualizationTypeSchema.default("pca"),
+  msaSettings: MsaSettingsSchema.default(() => ({})),
+  querySettings: QuerySettingsSchema.default(() => ({})),
 });
 
 export type SessionSettings = z.output<typeof SessionSettingsSchema>;
