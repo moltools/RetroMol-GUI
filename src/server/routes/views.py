@@ -102,13 +102,13 @@ def get_embedding_space() -> tuple[dict[str, str], int]:
         return jsonify({"error": "Missing sessionId or items"}), 400
     
     # Filter out any item that does not have required fields for item
-    required_fields_item = {"id", "kind", "fingerprints"}
+    required_fields_item = {"id", "kind", "retrofingerprints"}
     items = [item for item in items if required_fields_item.issubset(item.keys())]
 
     # Filter out any item that does not have required fields for fingerprint item
-    required_fields_fp = {"id", "fingerprint512", "score"}
+    required_fields_fp = {"id", "retrofingerprint512", "score"}
     for item in items:
-        item["fingerprints"] = [fp_item for fp_item in item["fingerprints"] if required_fields_fp.issubset(fp_item.keys())]
+        item["retrofingerprints"] = [fp_item for fp_item in item["retrofingerprints"] if required_fields_fp.issubset(fp_item.keys())]
     
     t0 = time.time()
 
@@ -119,16 +119,16 @@ def get_embedding_space() -> tuple[dict[str, str], int]:
         reduce_fp = True
 
     try:
-        # Decode fingerprints
+        # Decode retrofingerprints
         kinds, parent_ids, child_ids, fps = [], [], [], []
         for item in items:
-            for fp_item in item["fingerprints"]:
+            for fp_item in item["retrofingerprints"]:
                 kinds.append(item["kind"])
                 parent_ids.append(item["id"])
                 child_ids.append(fp_item["id"])
-                fps.append(hex_to_bits(fp_item["fingerprint512"]))
+                fps.append(hex_to_bits(fp_item["retrofingerprint512"]))
 
-        # Handle case with no fingerprints
+        # Handle case with no retrofingerprints
         if len(fps) == 0:
             # Return empty points
             points = []
@@ -139,7 +139,7 @@ def get_embedding_space() -> tuple[dict[str, str], int]:
 
             # Reduce dimensionality if needed
             if reduce_fp:
-                # Remove every bit that is not set in "gene_cluster" fingerprints
+                # Remove every bit that is not set in "gene_cluster" retrofingerprints
                 gene_cluster_fps = fps[[i for i, kind in enumerate(kinds) if kind == "gene_cluster"]]
                 bits_to_keep = np.any(gene_cluster_fps, axis=0)
                 fps = fps[:, bits_to_keep]
@@ -203,19 +203,19 @@ def run_enrichment() -> tuple[dict[str, str], int]:
     """
     payload = request.get_json(force=True) or {}
 
-    fp_hex_string = payload.get("fingerprint512")
+    fp_hex_string = payload.get("retrofingerprint512")
     query_settings = payload.get("querySettings", {})
 
     # Guard against missing fingerprint
     if not fp_hex_string:
-        return jsonify({"error": "Missing fingerprint512"}), 400
+        return jsonify({"error": "Missing retrofingerprint512"}), 400
 
     t0 = time.time()
 
     result = execute_named_query(
         name="cross_modal_retrieval",
         params={
-            "fingerprint512": fp_hex_string,
+            "retrofingerprint512": fp_hex_string,
             "querySettings": query_settings,
         },
         paging={},

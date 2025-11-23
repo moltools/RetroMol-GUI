@@ -286,7 +286,7 @@ export const WorkspaceItemCard: React.FC<WorkspaceItemCardProps> = ({
       <Box>
         {isDone && (
           <Stack spacing={0.5} sx={{ pl: 8 }}>
-            {item.fingerprints.map((fp, idx) => (
+            {item.retrofingerprints.map((fp, idx) => (
               <Stack
                 key={fp.id}
                 direction="row"

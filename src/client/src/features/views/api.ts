@@ -28,14 +28,14 @@ export async function getEmbeddingSpace(
   return data.points;
 }
 
-export async function runEnrichment({ fingerprint512, querySettings }: {
-  fingerprint512: any;
+export async function runEnrichment({ retrofingerprint512, querySettings }: {
+  retrofingerprint512: any;
   querySettings: QuerySettings;
 }): Promise<EnrichmentResult> {
   const data = await postJson(
     "/api/enrich",
     {
-      fingerprint512,
+      retrofingerprint512,
       querySettings,
     },
     GetEnrichmentResultRespSchema

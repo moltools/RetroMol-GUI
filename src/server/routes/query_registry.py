@@ -13,7 +13,7 @@ def preprocess_cross_modal_params(typed: dict) -> dict:
     :param typed: the typed parameters dictionary
     :return: the preprocessed parameters dictionary
     """
-    fp_hex_string = typed["fingerprint512"]
+    fp_hex_string = typed["retrofingerprint512"]
     fp = hex_to_bits(fp_hex_string)
     fp = [float(x) for x in fp]
     typed["qv"] = Vector(fp)
@@ -103,7 +103,7 @@ QUERIES = {
         "allowed_order_cols": {"identifier", "name", "source", "ext_id", "score"},
         "default_order_col": "score",
         "default_order_dir": "DESC",
-        "required": { "fingerprint512": str, "querySettings": dict },
+        "required": { "retrofingerprint512": str, "querySettings": dict },
         "optional": {},
         "preprocess_params": preprocess_cross_modal_params,
     },

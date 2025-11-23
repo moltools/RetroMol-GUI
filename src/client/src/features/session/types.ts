@@ -14,6 +14,7 @@ export const PrimarySequenceMotifSchema = z.object({
   name: z.string().nullable().optional(),
   displayName: z.string().nullable().optional(),
   smiles: z.string().nullable().optional(),
+
 })
 
 export type PrimarySequenceMotif = z.output<typeof PrimarySequenceMotifSchema>;
@@ -28,24 +29,24 @@ export type PrimarySequence = z.output<typeof PrimarySequenceSchema>;
 
 export const BaseFingerprintSchema = z.object({
   id: z.string(),
-  fingerprint512: z.string().length(128),
+  retrofingerprint512: z.string().length(128),
   score: z.number().min(0).max(1),
 })
 
-export const CompoundFingerprintSchema = BaseFingerprintSchema.extend({});
-export const GeneClusterFingerprintSchema = BaseFingerprintSchema.extend({});
+export const CompoundRetrofingerprintSchema = BaseFingerprintSchema.extend({});
+export const GeneClusterRetrofingerprintSchema = BaseFingerprintSchema.extend({});
 
 export const CompoundItemSchema = BaseItemSchema.extend({
   kind: z.literal("compound"),
   smiles: z.string(),
-  fingerprints: z.array(CompoundFingerprintSchema).default([]),
+  retrofingerprints: z.array(CompoundRetrofingerprintSchema).default([]),
   primarySequences: z.array(PrimarySequenceSchema).default([]),
 })
 
 export const GeneClusterSchema = BaseItemSchema.extend({
   kind: z.literal("gene_cluster"),
   fileContent: z.string(),
-  fingerprints: z.array(GeneClusterFingerprintSchema).default([]),
+  retrofingerprints: z.array(GeneClusterRetrofingerprintSchema).default([]),
   primarySequences: z.array(PrimarySequenceSchema).default([]),
 })
 

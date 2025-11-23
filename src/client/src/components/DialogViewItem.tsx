@@ -26,9 +26,9 @@ export const DialogViewItem: React.FC<DialogViewItemProps> = ({
       { item && (
         <>
           <div>Viewing item: {item.id}</div>
-          {item.fingerprints && item.fingerprints.length > 0 && (
+          {item.retrofingerprints && item.retrofingerprints.length > 0 && (
             <>
-              <div>Number of fingerprints: {item.fingerprints.length}</div>
+              <div>Number of retrofingerprints: {item.retrofingerprints.length}</div>
               {item.primarySequences && item.primarySequences.length > 0 && (
                 <>
                   <div>Number of primary sequences: {item.primarySequences.length}</div>

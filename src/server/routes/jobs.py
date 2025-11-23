@@ -118,10 +118,10 @@ def _compute_compound(generator: FingerprintGenerator, smiles: str) -> tuple[lis
                 "sequence": ms_rev,
             })
 
-    # Generate fingerprints
+    # Generate retrofingerprints
     fps: np.ndarray = generator.fingerprint_from_result(result, num_bits=512, counted=False) # shape [N, 512] where N>=1
 
-    # Convert fingerprints to hex strings
+    # Convert retrofingerprints to hex strings
     fp_hex_strings = [bits_to_hex(fp) for fp in fps] if len(fps) > 0 else [np.zeros((512,), dtype=bool)]
 
     return [cov for _ in range(len(fp_hex_strings))], fp_hex_strings, linear_readouts
@@ -326,10 +326,10 @@ def submit_compound() -> tuple[dict[str, str], int]:
         def mark_done(it: dict) -> None:
             it["name"] = name or it.get("name")
             it["smiles"] = smiles or it.get("smiles")
-            it["fingerprints"] = [
+            it["retrofingerprints"] = [
                 {
                     "id": get_unique_identifier(),
-                    "fingerprint512": fp_hex,
+                    "retrofingerprint512": fp_hex,
                     "score": cov,
                 }
                 for cov, fp_hex in zip(coverages, fp_hex_strings, strict=True)
@@ -433,10 +433,10 @@ def submit_gene_cluster()  -> tuple[dict[str, str], int]:
         def mark_done(it: dict) -> None:
             it["name"] = name or it.get("name")
             it["fileContent"] = file_content or it.get("fileContent")
-            it["fingerprints"] = [
+            it["retrofingerprints"] = [
                 {
                     "id": get_unique_identifier(),
-                    "fingerprint512": fp_hex,
+                    "retrofingerprint512": fp_hex,
                     "score": score,
                 }
                 for idx, (score, fp_hex) in enumerate(zip(scores, fp_hex_strings, strict=True), start=1)

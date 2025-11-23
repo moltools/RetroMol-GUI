@@ -100,7 +100,7 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
 
   // Items that have at least one fingerprint/readout
   const itemsWithFingerprints = React.useMemo(() => {
-    return (session.items || []).filter((item) => item.fingerprints && item.fingerprints.length > 0);
+    return (session.items || []).filter((item) => item.retrofingerprints && item.retrofingerprints.length > 0);
   }, [session.items]);
 
   const similarityThreshold = session.settings.querySettings?.similarityThreshold ?? 0.7;
@@ -115,11 +115,11 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
     [similarityThreshold]
   );
 
-  // Flatten fingerprints for selection list
+  // Flatten retrofingerprints for selection list
   const fingerprintOptions = React.useMemo(() => {
     const options: { itemId: string; fpId: string; label: string }[] = [];
     for (const item of itemsWithFingerprints) {
-      item.fingerprints!.forEach((fp, idx) => {
+      item.retrofingerprints!.forEach((fp, idx) => {
         options.push({
           itemId: item.id,
           fpId: fp.id,
@@ -198,16 +198,16 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
 
         // Get selected fingerprint data
         const selectedItem = session.items?.find((item) => item.id === selectedItemId);
-        const selectedFingerprint = selectedItem?.fingerprints?.find((fp) => fp.id === selectedFingerprintId);
+        const selectedFingerprint = selectedItem?.retrofingerprints?.find((fp) => fp.id === selectedFingerprintId);
         if (!selectedFingerprint || !selectedFingerprint) {
           setEnrichmentError("Selected readout data not found.");
           return;
         }
 
-        const fingerprint512 = selectedFingerprint.fingerprint512;
+        const retrofingerprint512 = selectedFingerprint.retrofingerprint512;
         
         const data = await runEnrichment({
-          fingerprint512,
+          retrofingerprint512,
           querySettings: session.settings.querySettings
         });
         setEnrichmentResult(data);
@@ -231,7 +231,7 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
 
       // Get the selected fingerprint data
       const selectedItem = session.items?.find((item) => item.id === selectedItemId);
-      const selectedFingerprint = selectedItem?.fingerprints?.find((fp) => fp.id === selectedFingerprintId);
+      const selectedFingerprint = selectedItem?.retrofingerprints?.find((fp) => fp.id === selectedFingerprintId);
       if (!selectedFingerprint || !selectedFingerprint) {
         pushNotification("Selected readout data not found.", "error");
         return null;
@@ -247,7 +247,7 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
         const data = await runQuery({
           name: "cross_modal_retrieval",
           params: {
-            fingerprint512: selectedFingerprint.fingerprint512,
+            retrofingerprint512: selectedFingerprint.retrofingerprint512,
             querySettings,
           },
           paging: { limit, offset },

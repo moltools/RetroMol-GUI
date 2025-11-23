@@ -52,7 +52,7 @@ export const ViewEmbeddingSpace: React.FC<ViewEmbeddingSpaceProps> = ({
   const scoreByChildId = React.useMemo(() => {
     const map = new Map<string, number>();
     for (const item of session.items) {
-      for (const fp of item.fingerprints || []) {
+      for (const fp of item.retrofingerprints || []) {
         map.set(fp.id, fp.score);
       }
     }
@@ -69,7 +69,7 @@ export const ViewEmbeddingSpace: React.FC<ViewEmbeddingSpaceProps> = ({
     for (const p of points) {
       const parent = parentById.get(p.parent_id) ?? null;
       const parentName = parent ? parent.name : "unknown";
-      const childIds = parent?.fingerprints.map((fp) => fp.id) || [];
+      const childIds = parent?.retrofingerprints.map((fp) => fp.id) || [];
       const childIdx = childIds.indexOf(p.child_id);
       const key = p.kind || "unknown";
 
@@ -96,15 +96,15 @@ export const ViewEmbeddingSpace: React.FC<ViewEmbeddingSpaceProps> = ({
 
     return session.items
       .map((item) => {
-        const fpIds = (item.fingerprints || []).map((fp) => fp.id).join(",");
+        const fpIds = (item.retrofingerprints || []).map((fp) => fp.id).join(",");
         return `${item.id}:${item.status}:${item.updatedAt}:${fpIds}`;
       })
       .join("|")
   }, [session.items]);
 
-  // Filtered items with fingerprints
+  // Filtered items with retrofingerprints
   const itemsWithFingerprints = React.useMemo(() => {
-    return session.items?.filter((item) => item.fingerprints && item.fingerprints.length > 0) || [];
+    return session.items?.filter((item) => item.retrofingerprints && item.retrofingerprints.length > 0) || [];
   }, [session.items]);
 
   // Fetch embedding space points when session changes
