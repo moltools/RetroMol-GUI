@@ -34,7 +34,6 @@ export const WorkspaceDashboard: React.FC = () => {
             Getting started
           </Typography>
           <Typography variant="body1">
-            Welcome to the RetroMol dashboard! Here you can find an overview of available data in the database.
             Use the navigation menu on the left to upload your data in the&nbsp;
             <MuiLink
               component={RouterLink}
