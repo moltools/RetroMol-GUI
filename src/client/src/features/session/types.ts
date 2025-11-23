@@ -35,6 +35,22 @@ export const PrimarySequenceSchema = z.object({
 
 export type PrimarySequence = z.output<typeof PrimarySequenceSchema>;
 
+export const MsaSequenceSchema = PrimarySequenceSchema.extend({
+  itemId: z.string(),
+  primarySequenceId: z.string(),
+  hidden: z.boolean().default(false),
+});
+
+export type MsaSequence = z.output<typeof MsaSequenceSchema>;
+
+export const MsaStateSchema = z.object({
+  aligned: z.boolean().default(false),
+  centerId: z.string().nullable().optional(),
+  sequences: z.array(MsaSequenceSchema).default([]),
+});
+
+export type MsaState = z.output<typeof MsaStateSchema>;
+
 export const BaseFingerprintSchema = z.object({
   id: z.string(),
   retrofingerprint512: z.string().length(128),
@@ -106,6 +122,7 @@ export const SessionSchema = z.object({
   created: z.number().nonnegative().default(() => Date.now()),
   items: z.array(SessionItemSchema).default([]),
   settings: SessionSettingsSchema.default(() => ({})),
+  msaState: MsaStateSchema.default(() => ({})),
 })
 
 export type Session = z.output<typeof SessionSchema>;

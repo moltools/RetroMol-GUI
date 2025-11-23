@@ -517,11 +517,18 @@ def run_msa() -> tuple[dict[str, str], int]:
         # Gather unique set of motifs
         curr_motif_names = set()
         motifs = [gap_symbol]  # gap symbol
+        motif_by_name: dict[str | None, dict] = {}
         for seq in primary_sequences:
             for motif in seq["sequence"]:
-                if motif["name"] not in curr_motif_names:
-                    curr_motif_names.add(motif["name"])
+                name = motif.get("name") if isinstance(motif, dict) else motif
+                if name not in curr_motif_names:
+                    curr_motif_names.add(name)
                     motifs.append(motif)
+                # Keep richest motif seen for this name
+                if isinstance(motif, dict):
+                    prev = motif_by_name.get(name)
+                    if prev is None or (prev.get("morganfingerprint2048r2") is None and motif.get("morganfingerprint2048r2") is not None):
+                        motif_by_name[name] = motif
 
         # Construct substitution matrix
         sm, _ = create_substituion_matrix_dynamically(motifs, compare=motif_compare, label_fn=label_motif)
@@ -540,21 +547,34 @@ def run_msa() -> tuple[dict[str, str], int]:
         for i, aligned_seq in zip(order, msa):
             seq = primary_sequences[i]
             seq["sequence"] = []
+            def _normalize_motif(raw_motif: dict | str, name: str | None) -> dict:
+                if isinstance(raw_motif, dict):
+                    base = raw_motif.copy()
+                else:
+                    base = motif_by_name.get(name, {}) if name is not None else {}
+                return {
+                    **base,
+                    "id": base.get("id") or get_unique_identifier(),
+                    "name": name,
+                    "displayName": base.get("displayName"),
+                    "tags": base.get("tags", []),
+                    "smiles": base.get("smiles"),
+                    "morganfingerprint2048r2": base.get("morganfingerprint2048r2"),
+                }
+
             for motif in aligned_seq:
                 if motif == gap_symbol:
                     seq["sequence"].append({
                         "id": f"pad-{get_unique_identifier()}",
                         "name": None,
                         "displayName": None,
+                        "tags": [],
                         "smiles": None,
+                        "morganfingerprint2048r2": None,
                     })
                 else:
-                    seq["sequence"].append({
-                        "id": get_unique_identifier(),
-                        "name": motif,
-                        "displayName": None,
-                        "smiles": None,
-                    })
+                    name = motif.get("name") if isinstance(motif, dict) else motif
+                    seq["sequence"].append(_normalize_motif(motif, name))
             aligned_sequences.append(seq)
 
     except Exception as e:
