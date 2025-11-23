@@ -42,6 +42,8 @@ export const DialogViewItem: React.FC<DialogViewItemProps> = ({
                           <div>Name: {motif.name ?? "N/A"}</div>
                           <div>Display Name: {motif.displayName ?? "N/A"}</div>
                           <div>SMILES: {motif.smiles ?? "N/A"}</div>
+                          <div>Tags: {motif.tags.join(", ") || "None"}</div>
+                          <div>Morgan Fingerprint hex (2048 r2): {motif.morganfingerprint2048r2 ?? "N/A"}</div>
                         </div>
                       ))}
                     </div>

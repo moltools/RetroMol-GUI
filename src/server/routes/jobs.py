@@ -7,6 +7,12 @@ import time
 import numpy as np
 from flask import Blueprint, current_app, request, jsonify
 from retromol.api import run_retromol
+from retromol.chem import (
+    smiles_to_mol,
+    get_tags_mol,
+    mol_to_smiles,
+    mol_to_fpr,
+)
 from retromol.fingerprint import (
     FingerprintGenerator,
     NameSimilarityConfig,
@@ -75,17 +81,20 @@ def _setup_fingerprint_generator() -> FingerprintGenerator:
     return generator
 
 
-def _compute_compound(generator: FingerprintGenerator, smiles: str) -> tuple[list[float], list[str], list[dict]]:
+def _compute_compound(generator: FingerprintGenerator, smiles: str) -> tuple[str, list[float], list[str], list[dict]]:
     """
     Compute 512-bit fingerprint for a compound given its SMILES.
 
     :param generator: the fingerprint generator instance
     :param smiles: the SMILES string of the compound
-    :return: tuple of (list of coverage values, list of fingerprint hex strings, list of linear readouts)
+    :return: tuple of (tagged smiles string, list of coverage values, list of fingerprint hex strings, list of linear readouts)
     """
     # Parse compound with RetroMol
     input_data = RetroMolInput(cid="compound", repr=smiles)
     result = run_retromol(input_data)
+
+    # Retrieve tagged SMILES from result
+    tagged_smiles = result.get_input_smiles(remove_tags=False)
 
     # Calculate coverage
     cov = result.best_total_coverage()
@@ -97,16 +106,39 @@ def _compute_compound(generator: FingerprintGenerator, smiles: str) -> tuple[lis
         for path_idx, path in enumerate(level["strict_paths"]):
             ms = path["ordered_monomers"]
             if len(ms) <= 2: continue  # skip too short
-            ms_fwd = [
-                {
-                    "id": get_unique_identifier(),
-                    "name": m.get("identity", "unknown"),
-                    "displayName": None,
-                    "smiles": m.get("smiles", None),
-                }
-                for m in ms
-            ]
+
+            ms_fwd = []
+            for m in ms:
+                m_id = get_unique_identifier()
+                m_name = m.get("identity", "unknown")
+                m_display_name = None
+
+                # Process motif SMILES, if any
+                tagged_smiles = m.get("smiles", None)
+                if tagged_smiles:
+                    mol = smiles_to_mol(tagged_smiles)
+                    tags: list[int] = get_tags_mol(mol)
+                    clean_smiles = mol_to_smiles(mol, remove_tags=True)
+                    clean_mol = smiles_to_mol(clean_smiles)
+                    morgan_fp = mol_to_fpr(clean_mol, rad=2, nbs=2048)
+                    morgan_fp_hex = bits_to_hex(morgan_fp, n_bits=2048)
+                else:
+                    tags = []
+                    clean_smiles = None
+                    morgan_fp = None
+
+                ms_fwd.append({
+                    "id": m_id,
+                    "name": m_name,
+                    "displayName": m_display_name,
+                    "tags": tags,
+                    "smiles": clean_smiles,
+                    "morganfingerprint2048r2": morgan_fp_hex,
+                })
+
+            # Get other direction
             ms_rev = list(reversed(ms_fwd))
+
             linear_readouts.append({
                 "id": get_unique_identifier(),
                 "name": f"level{level_idx}_path{path_idx}_fwd",
@@ -124,7 +156,12 @@ def _compute_compound(generator: FingerprintGenerator, smiles: str) -> tuple[lis
     # Convert retrofingerprints to hex strings
     fp_hex_strings = [bits_to_hex(fp) for fp in fps] if len(fps) > 0 else [np.zeros((512,), dtype=bool)]
 
-    return [cov for _ in range(len(fp_hex_strings))], fp_hex_strings, linear_readouts
+    return (
+        tagged_smiles,
+        [cov for _ in range(len(fp_hex_strings))],
+        fp_hex_strings,
+        linear_readouts
+    )
 
 
 def _compute_gene_cluster(generator: FingerprintGenerator, itemId: str, gbk_str: str) -> tuple[list[float], list[str], list[dict]]:
@@ -183,7 +220,9 @@ def _compute_gene_cluster(generator: FingerprintGenerator, itemId: str, gbk_str:
                             "id": get_unique_identifier(),
                             "name": "A",
                             "displayName": None,
+                            "tags": [],
                             "smiles": None,
+                            "morganfingerprint2048r2": None,
                         })
                     case PKSModuleReadout(module_type="PKS_B") as m:
                         kmer.append(("B", None))
@@ -192,7 +231,9 @@ def _compute_gene_cluster(generator: FingerprintGenerator, itemId: str, gbk_str:
                             "id": get_unique_identifier(),
                             "name": "B",
                             "displayName": None,
+                            "tags": [],
                             "smiles": None,
+                            "morganfingerprint2048r2": None,
                         })
                     case PKSModuleReadout(module_type="PKS_C") as m:
                         kmer.append(("C", None))
@@ -201,7 +242,9 @@ def _compute_gene_cluster(generator: FingerprintGenerator, itemId: str, gbk_str:
                             "id": get_unique_identifier(),
                             "name": "C",
                             "displayName": None,
+                            "tags": [],
                             "smiles": None,
+                            "morganfingerprint2048r2": None,
                         })
                     case PKSModuleReadout(module_type="PKS_D") as m:
                         kmer.append(("D", None))
@@ -210,7 +253,9 @@ def _compute_gene_cluster(generator: FingerprintGenerator, itemId: str, gbk_str:
                             "id": get_unique_identifier(),
                             "name": "D",
                             "displayName": None,
+                            "tags": [],
                             "smiles": None,
+                            "morganfingerprint2048r2": None,
                         })
                     case NRPSModuleReadout() as m:
                         substrate_name = m.get("substrate_name", None)
@@ -222,7 +267,9 @@ def _compute_gene_cluster(generator: FingerprintGenerator, itemId: str, gbk_str:
                             "id": get_unique_identifier(),
                             "name": substrate_name or "unknown",
                             "displayName": None,
+                            "tags": [],
                             "smiles": substrate_smiles,
+                            "morganfingerprint2048r2": None,
                         })
                     case _: raise ValueError("Unknown module readout type")
 
@@ -320,12 +367,18 @@ def submit_compound() -> tuple[dict[str, str], int]:
     try:
         # Heavy work
         generator = _setup_fingerprint_generator()
-        coverages, fp_hex_strings, linear_readout = _compute_compound(generator, smiles)
+        (
+            tagged_smiles,
+            coverages,
+            fp_hex_strings,
+            linear_readout
+        ) = _compute_compound(generator, smiles)
 
         # Set final status=done and store results on this item only
         def mark_done(it: dict) -> None:
             it["name"] = name or it.get("name")
             it["smiles"] = smiles or it.get("smiles")
+            it["taggedSmiles"] = tagged_smiles
             it["retrofingerprints"] = [
                 {
                     "id": get_unique_identifier(),

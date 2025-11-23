@@ -1,7 +1,5 @@
 """Module for defining session endpoints."""
 
-import time
-
 from flask import Blueprint, request, jsonify
 
 from routes.session_store import (

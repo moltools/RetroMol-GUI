@@ -314,6 +314,9 @@ SERVER_OWNED_FIELDS = {
     "errorMessage",
     "retrofingerprints",
     "retrofingerprint512",
+    "primarySequences",
+    "smiles",
+    "taggedSmiles",
     "coverage",
     "updatedAt",
 }

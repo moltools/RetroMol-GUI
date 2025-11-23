@@ -13,9 +13,17 @@ export const PrimarySequenceMotifSchema = z.object({
   id: z.string(),
   name: z.string().nullable().optional(),
   displayName: z.string().nullable().optional(),
-  smiles: z.string().nullable().optional(),
 
-})
+  // Structural information
+  tags: z.array(z.number().int().nonnegative()).default([]),
+  smiles: z.string().nullable().optional(),
+  morganfingerprint2048r2: z.string().length(512).nullable().optional(),
+}).refine(
+  ({ smiles, morganfingerprint2048r2 }) => 
+    (smiles == null && morganfingerprint2048r2 == null) ||
+    (smiles != null && morganfingerprint2048r2 != null),
+    { message: "Both 'smiles' and 'morganfingerprint2048r2' must be provided together or both be null",}
+)
 
 export type PrimarySequenceMotif = z.output<typeof PrimarySequenceMotifSchema>;
 
@@ -39,6 +47,7 @@ export const GeneClusterRetrofingerprintSchema = BaseFingerprintSchema.extend({}
 export const CompoundItemSchema = BaseItemSchema.extend({
   kind: z.literal("compound"),
   smiles: z.string(),
+  taggedSmiles: z.string().nullable().optional(),
   retrofingerprints: z.array(CompoundRetrofingerprintSchema).default([]),
   primarySequences: z.array(PrimarySequenceSchema).default([]),
 })
