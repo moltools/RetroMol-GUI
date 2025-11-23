@@ -1,6 +1,5 @@
 """Module for defining job endpoints."""
 
-import re
 import tempfile
 import time
 
@@ -120,12 +119,12 @@ def _compute_compound(generator: FingerprintGenerator, smiles: str) -> tuple[str
                     tags: list[int] = get_tags_mol(mol)
                     clean_smiles = mol_to_smiles(mol, remove_tags=True)
                     clean_mol = smiles_to_mol(clean_smiles)
-                    morgan_fp = mol_to_fpr(clean_mol, rad=2, nbs=2048)
-                    morgan_fp_hex = bits_to_hex(morgan_fp, n_bits=2048)
+                    fp_bits = mol_to_fpr(clean_mol, rad=2, nbs=2048).reshape(-1).astype(np.uint8)
+                    morgan_fp_hex = bits_to_hex(fp_bits, n_bits=2048)
                 else:
                     tags = []
                     clean_smiles = None
-                    morgan_fp = None
+                    morgan_fp_hex = None
 
                 ms_fwd.append({
                     "id": m_id,
@@ -263,13 +262,22 @@ def _compute_gene_cluster(generator: FingerprintGenerator, itemId: str, gbk_str:
                         substrate_score = m.get("score", 0.0)
                         kmer.append((substrate_name, substrate_smiles))
                         pred_vals.append(substrate_score)
+
+                        # Calculate fingerprint for SMILES if present
+                        if substrate_smiles:
+                            clean_mol = smiles_to_mol(substrate_smiles)
+                            fp_bits = mol_to_fpr(clean_mol, rad=2, nbs=2048).reshape(-1).astype(np.uint8)
+                            morgan_fp_hex = bits_to_hex(fp_bits, n_bits=2048)
+                        else:
+                            morgan_fp_hex = None
+
                         linear_readout.append({
                             "id": get_unique_identifier(),
                             "name": substrate_name or "unknown",
                             "displayName": None,
                             "tags": [],
                             "smiles": substrate_smiles,
-                            "morganfingerprint2048r2": None,
+                            "morganfingerprint2048r2": morgan_fp_hex,
                         })
                     case _: raise ValueError("Unknown module readout type")
 

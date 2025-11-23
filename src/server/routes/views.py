@@ -14,6 +14,8 @@ from versalign.msa import calc_msa
 from versalign.printing import format_alignment
 from versalign.scoring import create_substituion_matrix_dynamically
 
+from retromol.chem import calc_tanimoto_similarity
+
 from routes.helpers import hex_to_bits, get_unique_identifier
 from routes.query import execute_named_query
 
@@ -411,22 +413,55 @@ def motif_compare(a: dict, b: dict) -> float:
 
     :param a: first item
     :param b: second item
-    :return: 1.0 if equal, else 0.0
+    :return: similarity score in [0, 1]
     """
-    if isinstance(a, str) or isinstance(b, str): # for gap as "-"
-        if a == b:
-            return 2.0
+    max_score = 1.0
+
+    def _base_unit(name: str | None) -> str | None:
+        if name is None:
+            return None
+        stripped = str(name).strip()
+        if not stripped:
+            return None
+        # Remove trailing digits (e.g., "A1" -> "A")
+        return re.sub(r"\d+$", "", stripped).upper()
+
+    def _unit_similarity(unit_a: str | None, unit_b: str | None) -> float | None:
+        if unit_a is None or unit_b is None:
+            return None
+        if unit_a == unit_b:
+            return max_score
+        high_pairs = {("A", "B"), ("B", "A"), ("B", "C"), ("C", "B"), ("C", "D"), ("D", "C")}
+        if (unit_a, unit_b) in high_pairs:
+            return (2.0 / 3.0) * max_score
+        mid_pairs = {("A", "C"), ("C", "A"), ("B", "D"), ("D", "B")}
+        if (unit_a, unit_b) in mid_pairs:
+            return (1.0 / 3.0) * max_score
+        return None
+
+    # Handle string inputs (e.g., gap "-") first to avoid attribute errors
+    if isinstance(a, str) or isinstance(b, str):
+        return 1.0 if a == b else 0.0
+
+    if not (isinstance(a, dict) and isinstance(b, dict)):
         return 0.0
-    name_a = a.get("name")
-    name_b = b.get("name")
-    if name_a == name_b:
-        return 2.0
-    # Names "A", "B", "C", "D" should match with any "A" + digit etc.
-    if name_a and name_b:
-        pattern_a = re.escape(name_a) + r"\d*$"
-        pattern_b = re.escape(name_b) + r"\d*$"
-        if re.match(pattern_a, name_b) or re.match(pattern_b, name_a):
-            return 2.0
+
+    unit_a = _base_unit(a.get("name"))
+    unit_b = _base_unit(b.get("name"))
+    unit_score = _unit_similarity(unit_a, unit_b)
+    if unit_score is not None:
+        return unit_score
+
+    fp_a_hex = a.get("morganfingerprint2048r2")
+    fp_b_hex = b.get("morganfingerprint2048r2")
+    if fp_a_hex and fp_b_hex:
+        try:
+            fp_a = hex_to_bits(fp_a_hex, n_bits=2048)
+            fp_b = hex_to_bits(fp_b_hex, n_bits=2048)
+        except Exception:
+            return 0.0
+        tanimoto = float(calc_tanimoto_similarity(fp_a, fp_b))
+        return max(0.0, min(max_score, tanimoto * max_score))
 
     return 0.0
 
