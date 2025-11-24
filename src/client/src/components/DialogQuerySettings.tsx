@@ -64,7 +64,7 @@ export const DialogQuerySettings: React.FC<DialogQuerySettingsProps> = ({
             Search space impacts both the results returned and the enrichment calculations. Some annotations are only available for one type of item and
             will appear as significant only when that item type is included in the search space (e.g., chemical classes for compounds).
           </Typography>
-          <FormControl component="fieldset" disabled>
+          <FormControl component="fieldset">
             <RadioGroup
               value={localSettings.searchSpace ?? "both"}
               onChange={(e) => handleSearchSpaceChange(e.target.value as QuerySearchSpace)}

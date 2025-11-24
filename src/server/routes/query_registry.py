@@ -22,6 +22,9 @@ def preprocess_cross_modal_params(typed: dict) -> dict:
     similarity_threshold = query_settings.get("similarityThreshold", 0.0)
     typed["similarity_threshold"] = similarity_threshold
 
+    search_space = query_settings.get("searchSpace", "only_compounds")
+    typed["search_space"] = search_space
+
     return typed
 
 
@@ -89,15 +92,20 @@ QUERIES = {
                 cr.name AS name,
                 (1.0 - (rf.fp_retro_b512_vec_binary <=> %(qv)s)) AS score
             FROM retrofingerprint AS rf
-            JOIN retromol_compound rmc
+            LEFT JOIN retromol_compound rmc
             ON rmc.id = rf.retromol_compound_id
-            JOIN compound c
+            LEFT JOIN compound c
             ON c.id = rmc.compound_id
             LEFT join compound_record cr
             ON cr.compound_id = c.id
             WHERE vector_norm(rf.fp_retro_b512_vec_binary) > 0
             AND vector_norm(%(qv)s) > 0
             AND (1.0 - (rf.fp_retro_b512_vec_binary <=> %(qv)s)) >= %(similarity_threshold)s
+            AND (
+                %(search_space)s = 'both'
+                OR (%(search_space)s = 'only_compounds' AND rf.retromol_compound_id IS NOT NULL AND rf.biocracker_genbank_id IS NULL)
+                OR (%(search_space)s = 'only_gene_clusters' AND rf.biocracker_genbank_id IS NOT NULL AND rf.retromol_compound_id IS NULL)
+            )
             ORDER BY {order_col} {order_dir}
         """,
         "allowed_order_cols": {"identifier", "name", "source", "ext_id", "score"},
@@ -198,8 +206,8 @@ QUERIES = {
     "target_counts": {
         "sql": """
             SELECT
-                (SELECT COUNT(*) FROM compound) AS n_compounds,
-                (SELECT COUNT(*) FROM genbank_region) AS n_genbank_regions
+                (SELECT COUNT(DISTINCT compound_id) FROM annotation WHERE compound_id IS NOT NULL) AS n_compounds,
+                (SELECT COUNT(DISTINCT genbank_region_id) FROM annotation WHERE genbank_region_id IS NOT NULL) AS n_genbank_regions
         """,
         "allowed_order_cols": set(),
         "default_order_col": "",

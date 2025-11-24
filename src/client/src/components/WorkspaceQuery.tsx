@@ -104,6 +104,7 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
   }, [session.items]);
 
   const similarityThreshold = session.settings.querySettings?.similarityThreshold ?? 0.7;
+  const searchSpace = session.settings.querySettings?.searchSpace ?? "only_compounds";
   const [thresholdInput, setThresholdInput] = React.useState<string>(() => Math.round(similarityThreshold * 100).toString());
 
   React.useEffect(() => {
@@ -111,8 +112,12 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
   }, [similarityThreshold]);
 
   const querySettings = React.useMemo(
-    () => ({ similarityThreshold }),
-    [similarityThreshold]
+    () => (session.settings.querySettings || {
+      similarityThreshold: 0.7,
+      searchSpace: "only_compounds",
+      annotationFilters: [],
+    }),
+    [similarityThreshold, searchSpace]
   );
 
   // Flatten retrofingerprints for selection list
@@ -185,6 +190,7 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
         querySettings: newSettings,
       },
     }));
+    setSettingsDialogOpen(false);
   };
 
   // Second fetch for enrichment analysis for results
@@ -208,7 +214,7 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
         
         const data = await runEnrichment({
           retrofingerprint512,
-          querySettings: session.settings.querySettings
+          querySettings: querySettings,
         });
         setEnrichmentResult(data);
       } catch (err: any) {

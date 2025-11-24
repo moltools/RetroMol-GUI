@@ -207,6 +207,7 @@ def run_enrichment() -> tuple[dict[str, str], int]:
 
     fp_hex_string = payload.get("retrofingerprint512")
     query_settings = payload.get("querySettings", {})
+    search_space = query_settings.get("searchSpace", "only_compounds")
 
     # Guard against missing fingerprint
     if not fp_hex_string:
@@ -252,6 +253,12 @@ def run_enrichment() -> tuple[dict[str, str], int]:
         elif genbank_region_id and not compound_id: genbank_region_ids.add(genbank_region_id)
         # Ignore rows that have both or neither
 
+    # Filter for search space
+    if search_space == "only_compounds":
+        genbank_region_ids = set()
+    elif search_space == "only_gene_clusters":
+        compound_ids = set()
+
     # If somehow no targets, return empty result
     if not compound_ids and not genbank_region_ids:
         return jsonify({
@@ -293,7 +300,13 @@ def run_enrichment() -> tuple[dict[str, str], int]:
         order={},
     )
     bg_row = bg_counts["rows"][0]
-    background_total_targets = int(bg_row["n_compounds"]) + int(bg_row["n_genbank_regions"])
+
+    if search_space == "only_compounds":
+        background_total_targets = int(bg_row["n_compounds"])
+    elif search_space == "only_gene_clusters":
+        background_total_targets = int(bg_row["n_genbank_regions"])
+    else:
+        background_total_targets = int(bg_row["n_compounds"]) + int(bg_row["n_genbank_regions"])
 
     # Do statistical enrichment analysis (Fisher's exact test)
     full_rows = ann_full.get("rows", [])
@@ -316,13 +329,29 @@ def run_enrichment() -> tuple[dict[str, str], int]:
             base_row = full_lookup.get(key)
             if not base_row:
                 continue
-
-            subset_with = int(row.get("n_compounds", 0)) + int(row.get("n_genbank_regions", 0))
+            
+            # Determine subset counts based on search space
+            row_compounds = int(row.get("n_compounds", 0))
+            row_regions = int(row.get("n_genbank_regions", 0))
+            if search_space == "only_compounds":
+                subset_with = row_compounds
+            elif search_space == "only_gene_clusters":
+                subset_with = row_regions
+            else:
+                subset_with = row_compounds + row_regions
             if subset_with <= 0:
                 continue
-
-            background_with = int(base_row.get("n_compounds", 0)) + int(base_row.get("n_genbank_regions", 0))
-            if background_with <= 0 or background_with < subset_with:
+            
+            # Determine background counts based on search space
+            base_compounds = int(base_row.get("n_compounds", 0))
+            base_regions = int(base_row.get("n_genbank_regions", 0))
+            if search_space == "only_compounds":
+                background_with = base_compounds
+            elif search_space == "only_gene_clusters":
+                background_with = base_regions
+            else:
+                background_with = base_compounds + base_regions
+            if background_with <= 0:
                 continue
             
             # 2x2 per target:
