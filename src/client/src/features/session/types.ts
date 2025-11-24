@@ -102,7 +102,7 @@ export type MsaSettings = z.output<typeof MsaSettingsSchema>;
 
 export const QuerySettingsSchema = z.object({
   similarityThreshold: z.number().min(0).max(1).default(0.7),
-  searchSpace: QuerySearchSpaceSchema.default("both"),
+  searchSpace: QuerySearchSpaceSchema.default("only_compounds"),
   annotationFilters: z.array(AnnotationFilterSchema).default([]),
 });
 
