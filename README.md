@@ -1,3 +1,6 @@
+<a href="https://doi.org/10.5281/zenodo.17712684">
+    <img src="https://zenodo.org/badge/DOI/10.5281/zenodo.17712684.svg" alt="DOI" /></a>
+
 # RetroMol-GUI
 
 Graphical user interface for trying out RetroMol.
