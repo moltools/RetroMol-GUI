@@ -10,5 +10,6 @@ retromol==1.1.0
 biocracker==1.1.1
 versalign==2.0.5
 paras @ git+https://github.com/bthedragonmaster/parasect.git@v2.0.0
+raichu @ git+https://github.com/moltools/RAIChU
 scikit-learn
 umap-learn

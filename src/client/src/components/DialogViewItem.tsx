@@ -8,7 +8,7 @@ import { useNotifications } from "./NotificationProvider";
 import { DialogWindow } from "../components/DialogWindow";
 import { SessionItem } from "../features/session/types";
 import { SvgViewer } from "../components/SvgViewer";
-import { drawCompoundItem } from "../features/drawing/api";
+import { drawCompoundItem, drawGeneClusterItem } from "../features/drawing/api";
 
 type DialogViewItemProps = {
   open: boolean;
@@ -57,6 +57,10 @@ export const DialogViewItem: React.FC<DialogViewItemProps> = ({
           taggedParentSmiles,
           primarySequence
         );
+        setSvg(drawingSvg);
+      } else if (item.kind === "gene_cluster") {
+        // Call drawing API
+        const drawingSvg = await drawGeneClusterItem();
         setSvg(drawingSvg);
       } else {
         pushNotification("SVG drawing not supported for this item type.", "error");
@@ -120,6 +124,10 @@ export const DialogViewItem: React.FC<DialogViewItemProps> = ({
         <Typography variant="body1">
           No item selected.
         </Typography>
+      ) : svg === null || svg.length === 0 ? (
+        <Typography variant="body1">
+          No SVG drawing available for this item.
+        </Typography>
       ) : item.kind === "compound" ? (
         <Stack direction="column" gap={1} alignItems="flex-start">
           <Typography variant="body1">
@@ -149,17 +157,17 @@ export const DialogViewItem: React.FC<DialogViewItemProps> = ({
             />
           )}
         </Stack>
-      // ) : item.kind === "gene_cluster" ? (
-      //   <Stack direction="column" spacing={2} alignItems="center">
-      //     {svg && (
-      //       <SvgViewer
-      //         svg={svg}
-      //         onZoomChange={() => {}}
-      //         onElementClick={() => {}}
-      //         height={600}
-      //       />
-      //     )}
-      //   </Stack>
+      ) : item.kind === "gene_cluster" ? (
+        <Stack direction="column" spacing={2} alignItems="center">
+          {svg && (
+            <SvgViewer
+              svg={svg}
+              onZoomChange={() => {}}
+              onElementClick={() => {}}
+              height={600}
+            />
+          )}
+        </Stack>
       ) : (
         <Typography variant="body1">
           No preview available for this item type.

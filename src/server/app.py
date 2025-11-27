@@ -23,7 +23,10 @@ from routes.views import (
     blp_enrich,
     blp_run_msa,
 )
-from routes.drawing import blp_draw_compound_item
+from routes.drawing import (
+    blp_draw_compound_item,
+    blp_draw_gene_cluster_item,
+)
 
 
 # Initialize the Flask app
@@ -152,3 +155,4 @@ app.register_blueprint(blp_get_embedding_space)
 app.register_blueprint(blp_enrich)
 app.register_blueprint(blp_run_msa)
 app.register_blueprint(blp_draw_compound_item)
+app.register_blueprint(blp_draw_gene_cluster_item)

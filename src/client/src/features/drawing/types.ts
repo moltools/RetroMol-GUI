@@ -5,4 +5,3 @@ export const ItemDrawingResultSchema = z.object({
 });
 
 export type ItemDrawingResult = z.infer<typeof ItemDrawingResultSchema>;
-

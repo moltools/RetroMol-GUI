@@ -8,9 +8,16 @@ from dataclasses import dataclass
 from flask import Blueprint, request, jsonify
 from rdkit.Chem.Draw.rdMolDraw2D import DrawMoleculeACS1996, MolDraw2DSVG, MolDrawOptions
 from retromol.chem import smiles_to_mol
+from raichu.run_raichu import (
+    ClusterRepresentation,
+    ModuleRepresentation,
+    DomainRepresentation,
+    draw_cluster,
+)
 
 
 blp_draw_compound_item = Blueprint("draw_compound_item", __name__)
+blp_draw_gene_cluster_item = Blueprint("draw_gene_cluster_item", __name__)
 
 
 class Palette(Enum):
@@ -335,4 +342,82 @@ def draw_compound_item():
         background_color=payload.get("backgroundColor", None),
     )
     
+    return jsonify({"svg": svg_str}), 200
+
+
+@blp_draw_gene_cluster_item.post("/api/drawGeneClusterItem")
+def draw_gene_cluster_item():
+    """
+    Endpoint to handle drawing of gene cluster items.
+
+    :return: JSON response with query results or error message
+    """
+    payload = request.get_json(force=True) or {}
+
+    modules = [
+        ModuleRepresentation(
+            type="NRPS",
+            subtype=None,
+            substrate="alanine",
+            domains=[
+                DomainRepresentation(gene_name="geneA", type="A", subtype=None, name=None, active=True, used=True),
+                DomainRepresentation(gene_name="geneA", type="PCP", subtype=None, name=None, active=True, used=True)
+            ]
+        ),
+        ModuleRepresentation(
+            type="NRPS",
+            subtype=None,
+            substrate="**Unknown**",
+            domains=[
+                DomainRepresentation(gene_name="geneA", type="C", subtype=None, name=None, active=True, used=True),
+                DomainRepresentation(gene_name="geneA", type="A", subtype=None, name=None, active=True, used=True),
+                DomainRepresentation(gene_name="geneA", type="PCP", subtype=None, name=None, active=True, used=True)
+            ]
+        ),
+        ModuleRepresentation(
+            type="NRPS",
+            subtype=None,
+            substrate="cysteine",
+            domains=[
+                DomainRepresentation(gene_name="geneB", type="C", subtype=None, name=None, active=True, used=True),
+                DomainRepresentation(gene_name="geneB", type="A", subtype=None, name=None, active=True, used=True),
+                DomainRepresentation(gene_name="geneB", type="PCP", subtype=None, name=None, active=True, used=True)
+            ]
+        ),
+        ModuleRepresentation(
+            type="PKS",
+            subtype="PKS_CIS",
+            substrate="MALONYL_COA",
+            domains=[
+                DomainRepresentation("geneB", "KS", None, None, True, True),
+                DomainRepresentation("geneB", "AT", None, None, True, True),
+                DomainRepresentation("geneB", "KR", None, None, True, True),
+                DomainRepresentation("geneB", "DH", None, None, True, True),
+                DomainRepresentation("geneB", "ER", None, None, True, True),
+                DomainRepresentation("geneB", "ACP", None, None, True, True),
+                DomainRepresentation("geneB", "TE", None, None, True, True)
+            ]
+        ),
+                ModuleRepresentation(
+            type="PKS",
+            subtype="PKS_CIS",
+            substrate="WILDCARD",
+            domains=[
+                DomainRepresentation("geneB", "KS", None, None, True, True),
+                DomainRepresentation("geneB", "AT", None, None, True, True),
+                DomainRepresentation("geneB", "KR", None, None, True, True),
+                DomainRepresentation("geneB", "DH", None, None, True, True),
+                DomainRepresentation("geneB", "ER", None, None, True, True),
+                DomainRepresentation("geneB", "ACP", None, None, True, True),
+                DomainRepresentation("geneB", "TE", None, None, True, True)
+            ]
+        )
+    ]
+
+    if modules:
+        cluster_repr = ClusterRepresentation(modules)
+        svg_str = draw_cluster(cluster_repr, out_file=None, colour_by_module=False)
+    else:
+        return jsonify({"svg": ""}), 500
+
     return jsonify({"svg": svg_str}), 200
