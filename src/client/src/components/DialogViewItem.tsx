@@ -1,6 +1,9 @@
 import React from "react";
+import { Stack } from "@mui/material";
+import { Typography } from "@mui/material";
 import { DialogWindow } from "../components/DialogWindow";
 import { SessionItem } from "../features/session/types";
+import { SvgViewer } from "../components/SvgViewer";
 
 type DialogViewItemProps = {
   open: boolean;
@@ -13,6 +16,22 @@ export const DialogViewItem: React.FC<DialogViewItemProps> = ({
   item,
   onClose,
 }) => {
+  const [svg, setSvg] = React.useState<string | null>(null);
+
+  // Set dummy SVG for demonstration purposes
+  React.useEffect(() => {
+    if (item) {
+      // In a real application, fetch or generate the SVG based on the item
+      const dummySvg = `<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="100" cy="100" r="80" fill="lightblue" stroke="blue" stroke-width="2"/>
+        <text x="100" y="115" font-size="20" text-anchor="middle" fill="darkblue">Item ${item.id}</text>
+      </svg>`;
+      setSvg(dummySvg);
+    } else {
+      setSvg(null);
+    }
+  }, [item]);
+
   return (
     <DialogWindow
       open={open}
@@ -24,35 +43,18 @@ export const DialogViewItem: React.FC<DialogViewItemProps> = ({
       ]}
     >
       { item && (
-        <>
-          <div>Viewing item: {item.id}</div>
-          {item.retrofingerprints && item.retrofingerprints.length > 0 && (
-            <>
-              <div>Number of retrofingerprints: {item.retrofingerprints.length}</div>
-              {item.primarySequences && item.primarySequences.length > 0 && (
-                <>
-                  <div>Number of primary sequences: {item.primarySequences.length}</div>
-                  {item.primarySequences.map((ps) => (
-                    <div key={ps.id} style={{ marginTop: "1em", paddingLeft: "1em", borderLeft: "2px solid #ccc" }}>
-                      <div>Primary Sequence ID: {ps.id}</div>
-                      <div>Number of Motifs: {ps.sequence.length}</div>
-                      {ps.sequence.map((motif) => (
-                        <div key={motif.id} style={{ marginTop: "0.5em", paddingLeft: "1em", borderLeft: "2px solid #eee" }}>
-                          <div>Motif ID: {motif.id}</div>
-                          <div>Name: {motif.name ?? "N/A"}</div>
-                          <div>Display Name: {motif.displayName ?? "N/A"}</div>
-                          <div>SMILES: {motif.smiles ?? "N/A"}</div>
-                          <div>Tags: {motif.tags.join(", ") || "None"}</div>
-                          <div>Morgan Fingerprint hex (2048 r2): {motif.morganfingerprint2048r2 ?? "N/A"}</div>
-                        </div>
-                      ))}
-                    </div>
-                  ))}
-                </>
-              )}  
-            </>
+        <Stack direction="column" spacing={2} alignItems="center">
+          <Typography variant="caption" color="textSecondary">
+            Viewing item ID: {item.id}
+          </Typography>
+          {svg && (
+            <SvgViewer
+              svg={svg}
+              onZoomChange={() => {}}
+              onElementClick={() => {}}
+            />
           )}
-        </>
+        </Stack>
       )}
     </DialogWindow>
   )
