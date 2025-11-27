@@ -45,6 +45,18 @@ export const SvgViewer: React.FC<SvgViewerProps> = ({
 
   const containerRef = React.useRef<HTMLDivElement | null>(null);
 
+  const handleFit = () => {
+    // naive fit: reset zoom and pan
+    setZoom(initialZoom);
+    setPan({ x: 0, y: 0 });
+    setPanOrigin({ x: 0, y: 0 });
+  }
+
+  // Reset zoom and pan whenever SVG changes
+  React.useEffect(() => {
+    handleFit();
+  }, [svg, initialZoom]);
+
   // Notify parent about zoom changes
   React.useEffect(() => {
     onZoomChange?.(zoom);
@@ -64,13 +76,6 @@ export const SvgViewer: React.FC<SvgViewerProps> = ({
     if (typeof value === "number") {
       setZoom(value);
     }
-  }
-
-  const handleFit = () => {
-    // naive fit: reset zoom and pan
-    setZoom(initialZoom);
-    setPan({ x: 0, y: 0 });
-    setPanOrigin({ x: 0, y: 0 });
   }
 
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {

@@ -93,7 +93,7 @@ def _compute_compound(generator: FingerprintGenerator, smiles: str) -> tuple[str
     result = run_retromol(input_data)
 
     # Retrieve tagged SMILES from result
-    tagged_smiles = result.get_input_smiles(remove_tags=False)
+    tagged_smiles_input = result.get_input_smiles(remove_tags=False)
 
     # Calculate coverage
     cov = result.best_total_coverage()
@@ -156,7 +156,7 @@ def _compute_compound(generator: FingerprintGenerator, smiles: str) -> tuple[str
     fp_hex_strings = [bits_to_hex(fp) for fp in fps] if len(fps) > 0 else [np.zeros((512,), dtype=bool)]
 
     return (
-        tagged_smiles,
+        tagged_smiles_input,
         [cov for _ in range(len(fp_hex_strings))],
         fp_hex_strings,
         linear_readouts

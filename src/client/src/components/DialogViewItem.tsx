@@ -1,9 +1,14 @@
 import React from "react";
-import { Stack } from "@mui/material";
-import { Typography } from "@mui/material";
+import Stack from "@mui/material/Stack";
+import Typography from "@mui/material/Typography";
+import FormControl from "@mui/material/FormControl";
+import Select from "@mui/material/Select";
+import MenuItem from "@mui/material/MenuItem";
+import { useNotifications } from "./NotificationProvider";
 import { DialogWindow } from "../components/DialogWindow";
 import { SessionItem } from "../features/session/types";
 import { SvgViewer } from "../components/SvgViewer";
+import { drawCompoundItem } from "../features/drawing/api";
 
 type DialogViewItemProps = {
   open: boolean;
@@ -16,21 +21,89 @@ export const DialogViewItem: React.FC<DialogViewItemProps> = ({
   item,
   onClose,
 }) => {
+  const { pushNotification } = useNotifications();
+
+  const [initializedItemId, setInitializedItemId] = React.useState<string | null>(null);
+  const [selectPrimarySequenceId, setSelectPrimarySequenceId] = React.useState<string>("");
   const [svg, setSvg] = React.useState<string | null>(null);
 
-  // Set dummy SVG for demonstration purposes
-  React.useEffect(() => {
-    if (item) {
-      // In a real application, fetch or generate the SVG based on the item
-      const dummySvg = `<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="100" cy="100" r="80" fill="lightblue" stroke="blue" stroke-width="2"/>
-        <text x="100" y="115" font-size="20" text-anchor="middle" fill="darkblue">Item ${item.id}</text>
-      </svg>`;
-      setSvg(dummySvg);
-    } else {
+  const generateSvg = React.useCallback(async (primarySequenceId: string) => {
+    if (!item) {
+      setSvg(null);
+      return;
+    }
+
+    // Get Item primarySequence for primarySequenceId
+    const primarySequence = item.primarySequences?.find(seq => seq.id === primarySequenceId);
+    if (!primarySequence) {
+      pushNotification("Selected primary sequence not found in item.", "error");
+      setSvg(null);
+      return;
+    }
+
+    try {
+      if (item.kind === "compound") {
+        const taggedParentSmiles = item.taggedSmiles;
+
+        // Check if taggedParentSmiles is available
+        if (!taggedParentSmiles) {
+          pushNotification("No tagged SMILES available for this compound item.", "error");
+          setSvg(null);
+          return;
+        }
+         
+        // Call drawing API
+        const drawingSvg = await drawCompoundItem(
+          taggedParentSmiles,
+          primarySequence
+        );
+        setSvg(drawingSvg);
+      } else {
+        pushNotification("SVG drawing not supported for this item type.", "error");
+        setSvg(null);
+        return;
+      }
+    } catch (error) {
+      pushNotification("Error generating SVG drawing.", "error");
       setSvg(null);
     }
   }, [item]);
+
+  const initializePrimarySequence = React.useCallback(() => {
+    if (item && item.primarySequences && item.primarySequences.length > 0) {
+      const firstSeqId = item.primarySequences[0].id;
+      setSelectPrimarySequenceId(firstSeqId);
+      generateSvg(firstSeqId);
+    } else {
+      setSelectPrimarySequenceId("");
+      setSvg(null);
+    }
+  }, [item, generateSvg]);
+
+  // Initialize primary sequence selection when item changes
+  // Also avoid re-initializing if the same item is passed again
+  React.useEffect(() => {
+    if (!item) {
+      setInitializedItemId(null);
+      setSelectPrimarySequenceId("");
+      setSvg(null);
+      return;
+    }
+
+    // No redraw if same item
+    if (initializedItemId === item.id) {
+      return;
+    }
+
+    // New item is passed
+    setInitializedItemId(item.id);
+    initializePrimarySequence();
+  }, [item, initializedItemId, initializePrimarySequence]);
+
+  const handlePrimarySequenceChange = (sequenceId: string) => {
+    setSelectPrimarySequenceId(sequenceId);
+    generateSvg(sequenceId);
+  }
 
   return (
     <DialogWindow
@@ -38,24 +111,61 @@ export const DialogViewItem: React.FC<DialogViewItemProps> = ({
       onClose={onClose}
       title="View item"
       dividers
+      maxWidth="xl"
       actions={[
         { label: "Cancel", variant: "text", color: "inherit", onClick: onClose },
       ]}
     >
-      { item && (
-        <Stack direction="column" spacing={2} alignItems="center">
-          <Typography variant="caption" color="textSecondary">
-            Viewing item ID: {item.id}
+      { !item ? (
+        <Typography variant="body1">
+          No item selected.
+        </Typography>
+      ) : item.kind === "compound" ? (
+        <Stack direction="column" gap={1} alignItems="flex-start">
+          <Typography variant="body1">
+            To get started, select a primary sequence to map onto the input compound structure.
+            A downloadable SVG will be generated showing the mapping below the selector upon successful mapping.
           </Typography>
+          <FormControl fullWidth size="small">
+            <Select
+              label="Primary sequence"
+              value={selectPrimarySequenceId}
+              onChange={(e) => handlePrimarySequenceChange(e.target.value)}
+              disabled={!item.primarySequences || item.primarySequences.length === 0}
+            >
+              {item.primarySequences && item.primarySequences.map((seq) => (
+                <MenuItem key={seq.id} value={seq.id}>
+                  {seq.name || seq.id}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
           {svg && (
             <SvgViewer
               svg={svg}
               onZoomChange={() => {}}
               onElementClick={() => {}}
+              height={600}
             />
           )}
         </Stack>
+      // ) : item.kind === "gene_cluster" ? (
+      //   <Stack direction="column" spacing={2} alignItems="center">
+      //     {svg && (
+      //       <SvgViewer
+      //         svg={svg}
+      //         onZoomChange={() => {}}
+      //         onElementClick={() => {}}
+      //         height={600}
+      //       />
+      //     )}
+      //   </Stack>
+      ) : (
+        <Typography variant="body1">
+          No preview available for this item type.
+        </Typography>
       )}
+
     </DialogWindow>
   )
 }
