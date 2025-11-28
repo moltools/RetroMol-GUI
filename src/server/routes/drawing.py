@@ -1,12 +1,10 @@
 """Module for handling drawing-related routes."""
 
 import re
-from copy import deepcopy
 from enum import Enum
 from dataclasses import dataclass
 
 from flask import Blueprint, request, jsonify
-from rdkit.Chem.Draw.rdMolDraw2D import DrawMoleculeACS1996, MolDraw2DSVG, MolDrawOptions
 from retromol.chem import smiles_to_mol
 from raichu.run_raichu import draw_cluster
 from raichu.antismash import get_nrps_pks_modules
@@ -346,24 +344,33 @@ def draw_structure_with_pikachu(drawer: Drawer) -> str:
     drawer.move_to_positive_coords()
     drawer.convert_to_int()
 
-    min_x = 100000000
-    max_x = -100000000
-    min_y = 100000000
-    max_y = -100000000
+    min_x = 1e9
+    max_x = -1e9
+    min_y = 1e9
+    max_y = -1e9
+
+    # First pass: get bounds
+    for atom in drawer.structure.graph:
+        if atom.draw.positioned:
+            x = atom.draw.position.x
+            y = atom.draw.position.y
+            if x < min_x: min_x = x
+            if x > max_x: max_x = x
+            if y < min_y: min_y = y
+            if y > max_y: max_y = y
+
+    padding = drawer.options.padding
+    width = max_x - min_x + 2 * padding
+    height = max_y - min_y + 2 * padding
+
+    # Second pass: shift coordinates into viewbox
+    shift_x = padding - min_x
+    shift_y = padding - min_y
 
     for atom in drawer.structure.graph:
         if atom.draw.positioned:
-            if atom.draw.position.x < min_x:
-                min_x = atom.draw.position.x
-            if atom.draw.position.y < min_y:
-                min_y = atom.draw.position.y
-            if atom.draw.position.x > max_x:
-                max_x = atom.draw.position.x
-            if atom.draw.position.y > max_y:
-                max_y = atom.draw.position.y
-
-    width = max_x - min_x + 2 * drawer.options.padding
-    height = max_y - min_y + 2 * drawer.options.padding
+            atom.draw.position.x += shift_x
+            atom.draw.position.y += shift_y
 
     svg_string = f"""<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg">"""
     svg_string += drawer.svg_style
@@ -373,123 +380,81 @@ def draw_structure_with_pikachu(drawer: Drawer) -> str:
     return svg_string
 
 
+def highlight_pikachu_atoms(tagged_smiles: str, highlights: list[Highlight]) -> str:
+    """
+    Highlight atoms in a molecule using Pikachu based on provided tags and colors.
+
+    :param tagged_smiles: SMILES string of the tagged molecule
+    :param highlights: list of Highlight objects specifying tags and colors
+    :return: SVG string of the drawn molecule with highlights
+    """
+    # We have to translate isotope-stored tags from the SMILES to atom.nr in PIKAChU
+    # PIKAChU also labels hydrogen atoms, which we have to ignore for the highlights
+
+    # Create mapping: isotope tag to idx (read order in SMILES)
+    tag_to_idx = {}
+    tagged_parent = smiles_to_mol(tagged_smiles)
+    for atom in tagged_parent.GetAtoms():
+        idx = atom.GetIdx()
+        tag = atom.GetIsotope()
+        if tag > 0:
+            tag_to_idx[tag] = idx
+
+    # First map every tag to its corresponding Highlight's color
+    color_map = {}
+    for highlight in highlights:
+        for tag in highlight.tags:
+            if tag in tag_to_idx:
+                atom_idx = tag_to_idx[tag]
+                color_map[atom_idx + 1] = rgba_to_hex(highlight.color)
+    
+    # Now create a lookup of every non-hydogen atom
+    # PIKAChU reads the SMILES string from left-to-right so we can just count
+    structure = read_smiles(tagged_smiles)
+    non_h_count = 0
+    for atom in structure.get_atoms():
+        if atom.type == "H":
+            continue
+        
+        non_h_count += 1
+        atom.draw.colour = color_map.get(non_h_count, "black")
+
+    options = Options()
+    drawer = Drawer(structure, options=options, coords_only=True, kekulise=True)
+    mol_svg_str = draw_structure_with_pikachu(drawer)
+
+    return mol_svg_str
+
+
 def draw_highlights(
     tagged_parent_smiles: str,
+    tagged_subparent_smiles: str,
     highlights: list[Highlight],
-    background_color: str | None = None,
-    engine: str = "rdkit",
 ) -> None:
     """
     Draw highlights on a molecule given its tagged SMILES representation.
 
     :param tagged_parent_smiles: SMILES string of the tagged parent molecule
+    :param tagged_subparent_smiles: SMILES string of the tagged subparent molecule
     :param highlights: list of Highlight objects specifying tags and alpha values
-    :param background_color: optional background color in hex format
-    :param engine: drawing engine to use, either "rdkit" or "pikachu"
     :return: SVG string of the drawn molecule with highlights
     :raises ValueError: if an unknown drawing engine is specified
     """
-    if engine == "rdkit":
-        tagged_parent = smiles_to_mol(tagged_parent_smiles)
-        drawing: MolDraw2DSVG = MolDraw2DSVG(-1, -1)
+    mol1_svg_str = highlight_pikachu_atoms(tagged_parent_smiles, highlights)
+    mol2_svg_str = highlight_pikachu_atoms(tagged_subparent_smiles, highlights)
 
-        atoms_to_highlight: list[int] = []
-        bonds_to_highlight: list[int] = []
-        atom_highlight_colors: dict[int, tuple[float, float, float]] = {}
-        bond_highlight_colors: dict[int, tuple[float, float, float]] = {}
+    # Draw other SVG elements and inject structures
+    mol1_w, mol1_h, mol1_inner = extract_svg_body(mol1_svg_str)
+    mol2_w, mol2_h, mol2_inner = extract_svg_body(mol2_svg_str)
 
-        for highlight in highlights:
-            color = highlight.color
-            n_tags = highlight.tags
-
-            for atom in tagged_parent.GetAtoms():
-                a_tag = atom.GetIsotope()
-                if a_tag in n_tags:
-                    a_idx = atom.GetIdx()
-                    atoms_to_highlight.append(a_idx)
-                    atom_highlight_colors[a_idx] = color
-
-            for bond in tagged_parent.GetBonds():
-                b_begin_idx = bond.GetBeginAtom()
-                b_end_idx = bond.GetEndAtom()
-                b_begin_tag = b_begin_idx.GetIsotope()
-                b_end_tag = b_end_idx.GetIsotope()
-                if b_begin_tag in n_tags and b_end_tag in n_tags:
-                    b_idx = bond.GetIdx()
-                    bonds_to_highlight.append(b_idx)
-                    bond_highlight_colors[b_idx] = color
-
-        options: MolDrawOptions = drawing.drawOptions()
-        if background_color is not None:
-            options.setBackgroundColour(hex_to_rgb_tuple(background_color))
-        options.useBWAtomPalette()
-
-        # Remove isotopic labels for drawing
-        cp_tagged_parent = deepcopy(tagged_parent)
-        for atom in cp_tagged_parent.GetAtoms():
-            atom.SetIsotope(0)
-
-        # drawing.DrawMolecule(
-        DrawMoleculeACS1996(
-            drawing,
-            cp_tagged_parent,
-            highlightAtoms=atoms_to_highlight,
-            highlightBonds=bonds_to_highlight,
-            highlightAtomColors=atom_highlight_colors,
-            highlightBondColors=bond_highlight_colors,
-        )
-
-        drawing.FinishDrawing()
-        mol_svg_str = drawing.GetDrawingText().replace("svg:", "")
-    
-    elif engine == "pikachu":
-        # We have to translate isotope-stored tags from the SMILES to atom.nr in PIKAChU
-        # PIKAChU also labels hydrogen atoms, which we have to ignore for the highlights
-
-        # Create mapping: isotope tag to idx (read order in SMILES)
-        tag_to_idx = {}
-        tagged_parent = smiles_to_mol(tagged_parent_smiles)
-        for atom in tagged_parent.GetAtoms():
-            idx = atom.GetIdx()
-            tag = atom.GetIsotope()
-            if tag > 0:
-                tag_to_idx[tag] = idx
-
-        # First map every tag to its corresponding Highlight's color
-        color_map = {}
-        for highlight in highlights:
-            for tag in highlight.tags:
-                if tag in tag_to_idx:
-                    atom_idx = tag_to_idx[tag]
-                    color_map[atom_idx + 1] = rgba_to_hex(highlight.color)
-        
-        # Now create a lookup of every non-hydogen atom
-        # PIKAChU reads the SMILES string from left-to-right so we can just count
-        structure = read_smiles(tagged_parent_smiles)
-        non_h_count = 0
-        for atom in structure.get_atoms():
-            if atom.type == "H":
-                continue
-            
-            non_h_count += 1
-            atom.draw.colour = color_map.get(non_h_count, "black")
-
-        options = Options()
-        drawer = Drawer(structure, options=options, coords_only=True, kekulise=True)
-        mol_svg_str = draw_structure_with_pikachu(drawer)
-    
-    else:
-        raise ValueError(f"Unknown drawing engine: {engine}")
-    
-    mol1_w, mol1_h, mol1_inner = extract_svg_body(mol_svg_str)
     arrow_labels = ["preprocess", "sequence"]
     svg_str = build_compound_scheme_svg(
         mol1_width=mol1_w,
         mol1_height=mol1_h,
         mol1_inner_svg=mol1_inner,
-        mol2_width=mol1_w,
-        mol2_height=mol1_h,
-        mol2_inner_svg=mol1_inner,
+        mol2_width=mol2_w,
+        mol2_height=mol2_h,
+        mol2_inner_svg=mol2_inner,
         highlights=highlights,
         arrow_labels=arrow_labels,
     )
@@ -509,8 +474,13 @@ def draw_compound_item():
     # Check required fields
     tagged_parent_smiles = payload.get("taggedParentSmiles", None)
     primary_sequence = payload.get("primarySequence", None)
+    tagged_subparent_smiles = primary_sequence.get("parentSmilesTagged", None)
 
-    if tagged_parent_smiles is None or primary_sequence is None:
+    if (
+        tagged_parent_smiles is None
+        or primary_sequence is None
+        or tagged_subparent_smiles is None
+    ):
         return jsonify({"svg": ""}), 500
     
     # Parse out highlights
@@ -532,9 +502,8 @@ def draw_compound_item():
     # Draw highlights
     svg_str = draw_highlights(
         tagged_parent_smiles=tagged_parent_smiles,
+        tagged_subparent_smiles=tagged_subparent_smiles,
         highlights=highlights,
-        background_color=payload.get("backgroundColor", None),
-        engine="pikachu",
     )
     
     return jsonify({"svg": svg_str}), 200
