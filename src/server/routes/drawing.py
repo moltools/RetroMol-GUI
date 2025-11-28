@@ -14,6 +14,7 @@ from raichu.run_raichu import (
     DomainRepresentation,
     draw_cluster,
 )
+from raichu.antismash import parse_antismash_domains_gbk, get_nrps_pks_modules
 
 
 blp_draw_compound_item = Blueprint("draw_compound_item", __name__)
@@ -342,70 +343,15 @@ def draw_gene_cluster_item():
     """
     payload = request.get_json(force=True) or {}
 
-    modules = [
-        ModuleRepresentation(
-            type="NRPS",
-            subtype=None,
-            substrate="alanine",
-            domains=[
-                DomainRepresentation(gene_name="geneA", type="A", subtype=None, name=None, active=True, used=True),
-                DomainRepresentation(gene_name="geneA", type="PCP", subtype=None, name=None, active=True, used=True)
-            ]
-        ),
-        ModuleRepresentation(
-            type="NRPS",
-            subtype=None,
-            substrate="**Unknown**",
-            domains=[
-                DomainRepresentation(gene_name="geneA", type="C", subtype=None, name=None, active=True, used=True),
-                DomainRepresentation(gene_name="geneA", type="A", subtype=None, name=None, active=True, used=True),
-                DomainRepresentation(gene_name="geneA", type="PCP", subtype=None, name=None, active=True, used=True)
-            ]
-        ),
-        ModuleRepresentation(
-            type="NRPS",
-            subtype=None,
-            substrate="cysteine",
-            domains=[
-                DomainRepresentation(gene_name="geneB", type="C", subtype=None, name=None, active=True, used=True),
-                DomainRepresentation(gene_name="geneB", type="A", subtype=None, name=None, active=True, used=True),
-                DomainRepresentation(gene_name="geneB", type="PCP", subtype=None, name=None, active=True, used=True)
-            ]
-        ),
-        ModuleRepresentation(
-            type="PKS",
-            subtype="PKS_CIS",
-            substrate="MALONYL_COA",
-            domains=[
-                DomainRepresentation("geneB", "KS", None, None, True, True),
-                DomainRepresentation("geneB", "AT", None, None, True, True),
-                DomainRepresentation("geneB", "KR", None, None, True, True),
-                DomainRepresentation("geneB", "DH", None, None, True, True),
-                DomainRepresentation("geneB", "ER", None, None, True, True),
-                DomainRepresentation("geneB", "ACP", None, None, True, True),
-                DomainRepresentation("geneB", "TE", None, None, True, True)
-            ]
-        ),
-                ModuleRepresentation(
-            type="PKS",
-            subtype="PKS_CIS",
-            substrate="WILDCARD",
-            domains=[
-                DomainRepresentation("geneB", "KS", None, None, True, True),
-                DomainRepresentation("geneB", "AT", None, None, True, True),
-                DomainRepresentation("geneB", "KR", None, None, True, True),
-                DomainRepresentation("geneB", "DH", None, None, True, True),
-                DomainRepresentation("geneB", "ER", None, None, True, True),
-                DomainRepresentation("geneB", "ACP", None, None, True, True),
-                DomainRepresentation("geneB", "TE", None, None, True, True)
-            ]
-        )
-    ]
+    fileContent = payload.get("fileContent", None)
+    if fileContent is None:
+        return jsonify({"svg": "", "error": "Missing fileContent"}), 500
 
-    if modules:
-        cluster_repr = ClusterRepresentation(modules)
+    try:
+        modules = get_nrps_pks_modules(fileContent, file_mode="file_content")
+        cluster_repr = modules.make_raichu_cluster()
         svg_str = draw_cluster(cluster_repr, out_file=None, colour_by_module=False)
-    else:
-        return jsonify({"svg": ""}), 500
+    except Exception as e:
+        return jsonify({"svg": "", "error": str(e)}), 500
 
     return jsonify({"svg": svg_str}), 200

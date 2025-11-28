@@ -1,9 +1,12 @@
 import React from "react";
+import Alert from "@mui/material/Alert";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import FormControl from "@mui/material/FormControl";
 import Select from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
+import MuiLink from "@mui/material/Link";
+import CircularProgress from "@mui/material/CircularProgress";
 import { useNotifications } from "./NotificationProvider";
 import { DialogWindow } from "../components/DialogWindow";
 import { SessionItem } from "../features/session/types";
@@ -22,6 +25,8 @@ export const DialogViewItem: React.FC<DialogViewItemProps> = ({
   onClose,
 }) => {
   const { pushNotification } = useNotifications();
+  const [loading, setLoading] = React.useState<boolean>(false);
+  const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
 
   const [initializedItemId, setInitializedItemId] = React.useState<string | null>(null);
   const [selectPrimarySequenceId, setSelectPrimarySequenceId] = React.useState<string>("");
@@ -30,6 +35,7 @@ export const DialogViewItem: React.FC<DialogViewItemProps> = ({
   const generateSvg = React.useCallback(async (primarySequenceId: string) => {
     if (!item) {
       setSvg(null);
+      setErrorMsg(null);
       return;
     }
 
@@ -38,8 +44,11 @@ export const DialogViewItem: React.FC<DialogViewItemProps> = ({
     if (!primarySequence) {
       pushNotification("Selected primary sequence not found in item.", "error");
       setSvg(null);
+      setErrorMsg(null);
       return;
     }
+
+    setLoading(true);
 
     try {
       if (item.kind === "compound") {
@@ -58,18 +67,35 @@ export const DialogViewItem: React.FC<DialogViewItemProps> = ({
           primarySequence
         );
         setSvg(drawingSvg);
+        setErrorMsg(null);
       } else if (item.kind === "gene_cluster") {
         // Call drawing API
-        const drawingSvg = await drawGeneClusterItem();
+        const drawingSvg = await drawGeneClusterItem(item.fileContent || "");
         setSvg(drawingSvg);
+        setErrorMsg(null);
       } else {
-        pushNotification("SVG drawing not supported for this item type.", "error");
+        const errorMsg = "SVG drawing not supported for this item type.";
+        pushNotification(errorMsg, "error");
         setSvg(null);
+        setErrorMsg(errorMsg);
         return;
       }
     } catch (error) {
-      pushNotification("Error generating SVG drawing.", "error");
+      let errorMsg = "Error generating SVG drawing";
+      const errorBody = (error as any)?.body as string | undefined
+      if (errorBody) {
+        try {
+          const parsed = JSON.parse(errorBody);
+          if (typeof parsed?.error === "string") errorMsg = `${errorMsg}: ${parsed.error}`;
+        } catch (e) {
+          errorMsg = `${errorMsg}.`
+        }
+      }
+      pushNotification(errorMsg, "error");
       setSvg(null);
+      setErrorMsg(errorMsg);
+    } finally {
+      setLoading(false);
     }
   }, [item]);
 
@@ -81,6 +107,7 @@ export const DialogViewItem: React.FC<DialogViewItemProps> = ({
     } else {
       setSelectPrimarySequenceId("");
       setSvg(null);
+      setErrorMsg(null);
     }
   }, [item, generateSvg]);
 
@@ -91,6 +118,7 @@ export const DialogViewItem: React.FC<DialogViewItemProps> = ({
       setInitializedItemId(null);
       setSelectPrimarySequenceId("");
       setSvg(null);
+      setErrorMsg(null);
       return;
     }
 
@@ -117,10 +145,16 @@ export const DialogViewItem: React.FC<DialogViewItemProps> = ({
       dividers
       maxWidth="xl"
       actions={[
-        { label: "Cancel", variant: "text", color: "inherit", onClick: onClose },
+        { label: "Close", variant: "text", color: "inherit", onClick: onClose },
       ]}
     >
-      { !item ? (
+      { loading ? (
+        <Stack direction="row" justifyContent="center" alignItems="center" height={400}>
+          <CircularProgress />
+        </Stack>
+      ) : errorMsg ? (
+        <Alert severity="error">{errorMsg}</Alert>
+      ) : !item ? (
         <Typography variant="body1">
           No item selected.
         </Typography>
@@ -158,7 +192,22 @@ export const DialogViewItem: React.FC<DialogViewItemProps> = ({
           )}
         </Stack>
       ) : item.kind === "gene_cluster" ? (
-        <Stack direction="column" spacing={2} alignItems="center">
+        <Stack direction="column" spacing={2} alignItems="flex-start">
+          <Typography variant="body1">
+            <MuiLink href="https://research.wur.nl/en/publications/raichu-automating-the-visualisation-of-natural-product-biosynthes/" target="_blank" rel="noopener noreferrer">
+              RAIChU
+            </MuiLink>
+            &nbsp;is used to generate the gene cluster visualization below.
+            The SVG rendered below is included for informative purposes and does not reflect the exact encoding mechanism of the gene clustering by RetroMol.
+            This viewer serves as a wrapper around the RAIChU SVG generation API. For more information on RAIChU, please refer to the link provided.
+            Substrate predictions for non-ribosomal peptide (NRP) A-domains and polyketide synthase (PKS) acyltransferase (AT)-domains are taken directly from the&nbsp;
+            <MuiLink href="https://antismash.secondarymetabolites.org/#!/start" target="_blank" rel="noopener noreferrer">
+              antiSMASH
+            </MuiLink>
+            &nbsp;output.
+            This wrapper viewer around RAIChU currently does not use any of the PARAS substrate specificity predictions provided and used by RetroMol for similarity searches.
+            Additionally, this wrapper view around RAIChU only provided a visualization of the full region readout, not of individual candidate clusters found within the region.
+          </Typography>
           {svg && (
             <SvgViewer
               svg={svg}

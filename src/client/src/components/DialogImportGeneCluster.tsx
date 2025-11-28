@@ -2,6 +2,7 @@ import React from "react";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
+import MuiLink from "@mui/material/Link";
 import { DialogWindow } from "../components/DialogWindow";
 
 type DialogImportGeneClusterProps = {
@@ -40,7 +41,11 @@ export const DialogImportGeneCluster: React.FC<DialogImportGeneClusterProps> = (
     >
       <Stack spacing={2}>
         <Typography>
-          Select one or more GenBank files (.gbk, .gb, .genbank) containing gene cluster data to import into your workspace. Make sure the files are <b>antiSMASH</b> output files for best compatibility.
+          Select one or more GenBank files (.gbk, .gb, .genbank) containing gene cluster data to import into your workspace. Make sure the files are&nbsp;
+          <MuiLink href="https://antismash.secondarymetabolites.org/#!/start" target="_blank" rel="noopener noreferrer">
+            antiSMASH
+          </MuiLink>
+          &nbsp;output files for best compatibility.
         </Typography>
         <Button variant="outlined" component="label">
           Choose files

@@ -18,11 +18,13 @@ export async function drawCompoundItem(
 }
 
 export async function drawGeneClusterItem(
-
+  fileContent: string
 ): Promise<string> {
   const data = await postJson(
     "/api/drawGeneClusterItem",
-    {},
+    {
+      fileContent
+    },
     ItemDrawingResultSchema
   )
   return data.svg;
