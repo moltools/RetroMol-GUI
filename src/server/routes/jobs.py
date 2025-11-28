@@ -99,7 +99,7 @@ def _compute_compound(generator: FingerprintGenerator, smiles: str) -> tuple[str
     cov = result.best_total_coverage()
 
     # Calculate linear readouts
-    readout = retromol_linear_readout(result, require_identified=False)
+    readout = retromol_linear_readout(result, require_identified=False)  # TODO: change to "global_best" mode
     linear_readouts = []
     for level_idx, level in enumerate(readout["levels"]):
         for path_idx, path in enumerate(level["strict_paths"]):

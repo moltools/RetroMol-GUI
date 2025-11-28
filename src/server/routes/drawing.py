@@ -129,18 +129,24 @@ def extract_svg_body(svg_str: str) -> tuple[float, float, str]:
 
 
 def build_compound_scheme_svg(
-    mol_width: float,
-    mol_height: float,
-    mol_inner_svg: str,
+    mol1_width: float,
+    mol1_height: float,
+    mol1_inner_svg: str,
+    mol2_width: float,
+    mol2_height: float,
+    mol2_inner_svg: str,
     highlights: list[Highlight],
     arrow_labels: list[str] | None = None,
 ) -> str:
     """
     Build a full SVG with: [structure] --arrow--> [structure] --arrow--> [primary sequence]
 
-    :param mol_width: width of single molecule drawing
-    :param mol_height: height of single molecule drawing
-    :param mol_inner_svg: inner SVG content of molecule (no outer <svg> tags)
+    :param mol1_width: width of single molecule drawing
+    :param mol1_height: height of single molecule drawing
+    :param mol1_inner_svg: inner SVG content of molecule (no outer <svg> tags)
+    :param mol2_width: width of second molecule drawing
+    :param mol2_height: height of second molecule drawing
+    :param mol2_inner_svg: inner SVG content of second molecule (no outer <svg> tags)
     :param highlights: motif info for the primary sequence panel
     :param arrow_labels: optional labels above the arrows, e.g. ["step 1", "step 2"]
     """
@@ -150,9 +156,9 @@ def build_compound_scheme_svg(
     PADDING = 20.0
     H_GAP = 25.0  # gap between elements
     ARROW_LEN = 120.0
-    AVG_CHAR_WIDTH = 7.0
+    AVG_CHAR_WIDTH = 8.0
     MIN_BOX_WIDTH = 40.0
-    H_TEXT_PADDING = 14.0
+    H_TEXT_PADDING = 0.0
     SEQ_BOX_HEIGHT = 24.0
     SEQ_BOX_GAP = 4.0
 
@@ -166,29 +172,32 @@ def build_compound_scheme_svg(
     else:
         seq_panel_height = 2 * PADDING + SEQ_BOX_HEIGHT
 
-    content_height = max(mol_height, seq_panel_height)
+    max_mol_height = max(mol1_height, mol2_height)
+    content_height = max(max_mol_height, seq_panel_height)
     total_height = content_height + 2 * PADDING
 
     # X positions
     mol1_x = PADDING
-    mol1_y = (total_height - mol_height) / 2.0
+    mol1_y = (total_height - mol1_height) / 2.0
 
-    arrow1_x1 = mol1_x + mol_width + H_GAP
+    arrow1_x1 = mol1_x + mol1_width + H_GAP
     arrow1_x2 = arrow1_x1 + ARROW_LEN
 
     mol2_x = arrow1_x2 + H_GAP
-    mol2_y = mol1_y
+    mol2_y = (total_height - mol2_height) / 2.0
 
-    arrow2_x1 = mol2_x + mol_width + H_GAP
+    arrow2_x1 = mol2_x + mol2_width + H_GAP
     arrow2_x2 = arrow2_x1 + ARROW_LEN
 
     seq_x = arrow2_x2 + H_GAP
     seq_y = (total_height - seq_panel_height) / 2.0
 
-    widest_box = max(
-        max(MIN_BOX_WIDTH, len(h.display_name) * AVG_CHAR_WIDTH + H_TEXT_PADDING)
+    text_widths = [
+        len(h.display_name) * AVG_CHAR_WIDTH + H_TEXT_PADDING
         for h in highlights
-    ) if highlights else MIN_BOX_WIDTH
+    ] if highlights else [MIN_BOX_WIDTH]
+
+    widest_box = max(max(text_widths), MIN_BOX_WIDTH)
 
     seq_panel_width = widest_box + 2 * PADDING
 
@@ -206,38 +215,44 @@ def build_compound_scheme_svg(
         f'viewBox="0 0 {total_width:.2f} {total_height:.2f}">'
     )
 
-    # Arrowhead marker
-    svg_parts.append(
-        """
-        <defs>
-          <marker id="arrowhead" markerWidth="10" markerHeight="7"
-                  refX="10" refY="3.5" orient="auto">
-            <polygon points="0 0, 10 3.5, 0 7" />
-          </marker>
-        </defs>
-        """
-    )
-
     # First molecule
     svg_parts.append(
         f'<g transform="translate({mol1_x:.2f},{mol1_y:.2f})">'
-        f'{mol_inner_svg}'
+        f'{mol1_inner_svg}'
         '</g>'
     )
 
     # Second molecule
     svg_parts.append(
         f'<g transform="translate({mol2_x:.2f},{mol2_y:.2f})">'
-        f'{mol_inner_svg}'
+        f'{mol2_inner_svg}'
         '</g>'
     )
 
     # Arrow 1
+    head_len = 8.0
+    head_width = 6.0
+    line1_x2 = arrow1_x2 - head_len  # line end before arrowhead
+
     svg_parts.append(
         f'<line x1="{arrow1_x1:.2f}" y1="{arrow_y:.2f}" '
-        f'x2="{arrow1_x2:.2f}" y2="{arrow_y:.2f}" '
-        f'stroke="black" stroke-width="1.5" marker-end="url(#arrowhead)" />'
+        f'x2="{line1_x2:.2f}" y2="{arrow_y:.2f}" '
+        f'stroke="black" stroke-width="1.5" />'
     )
+
+    tip_x1 = arrow1_x2
+    tip_y1 = arrow_y
+    base_x1 = line1_x2
+    base_y1a = arrow_y - head_width / 2.0
+    base_y1b = arrow_y + head_width / 2.0
+
+    svg_parts.append(
+        f'<polygon points="{tip_x1:.2f},{tip_y1:.2f} '
+        f'{base_x1:.2f},{base_y1a:.2f} '
+        f'{base_x1:.2f},{base_y1b:.2f}" '
+        f'fill="black" />'
+    )
+
     if arrow_labels[0]:
         mid_x1 = (arrow1_x1 + arrow1_x2) / 2.0
         svg_parts.append(
@@ -246,11 +261,27 @@ def build_compound_scheme_svg(
         )
 
     # Arrow 2
+    line2_x2 = arrow2_x2 - head_len  # line end before arrowhead
+
     svg_parts.append(
         f'<line x1="{arrow2_x1:.2f}" y1="{arrow_y:.2f}" '
-        f'x2="{arrow2_x2:.2f}" y2="{arrow_y:.2f}" '
-        f'stroke="black" stroke-width="1.5" marker-end="url(#arrowhead)" />'
+        f'x2="{line2_x2:.2f}" y2="{arrow_y:.2f}" '
+        f'stroke="black" stroke-width="1.5" />'
     )
+
+    tip_x2 = arrow2_x2
+    tip_y2 = arrow_y
+    base_x2 = line2_x2
+    base_y2a = arrow_y - head_width / 2.0
+    base_y2b = arrow_y + head_width / 2.0
+
+    svg_parts.append(
+        f'<polygon points="{tip_x2:.2f},{tip_y2:.2f} '
+        f'{base_x2:.2f},{base_y2a:.2f} '
+        f'{base_x2:.2f},{base_y2b:.2f}" '
+        f'fill="black" />'
+    )
+
     if arrow_labels[1]:
         mid_x2 = (arrow2_x1 + arrow2_x2) / 2.0
         svg_parts.append(
@@ -282,19 +313,18 @@ def build_compound_scheme_svg(
     for h in highlights:
         fill_hex = rgba_to_hex(h.color)
         # Box
-        text_len = len(h.display_name)
-        box_width = max(MIN_BOX_WIDTH, text_len * AVG_CHAR_WIDTH + H_TEXT_PADDING)
+        box_width = widest_box
         svg_parts.append(
             f'<rect x="{seq_x + PADDING:.2f}" y="{current_y:.2f}" '
             f'width="{box_width:.2f}" height="{SEQ_BOX_HEIGHT:.2f}" '
             f'rx="3" ry="3" fill="{fill_hex}" stroke="black" />'
         )
         # Text in middle
-        text_x = seq_x + PADDING + box_width / 2.0
+        text_x = seq_x + PADDING + 4
         text_y = current_y + SEQ_BOX_HEIGHT / 2.0
         svg_parts.append(
             f'<text x="{text_x:.2f}" y="{text_y:.2f}" '
-            f'text-anchor="middle" dominant-baseline="middle" '
+            f'text-anchor="start" dominant-baseline="middle" '
             f'font-size="12">{h.display_name}</text>'
         )
 
@@ -451,12 +481,15 @@ def draw_highlights(
     else:
         raise ValueError(f"Unknown drawing engine: {engine}")
     
-    mol_w, mol_h, mol_inner = extract_svg_body(mol_svg_str)
+    mol1_w, mol1_h, mol1_inner = extract_svg_body(mol_svg_str)
     arrow_labels = ["preprocess", "sequence"]
     svg_str = build_compound_scheme_svg(
-        mol_width=mol_w,
-        mol_height=mol_h,
-        mol_inner_svg=mol_inner,
+        mol1_width=mol1_w,
+        mol1_height=mol1_h,
+        mol1_inner_svg=mol1_inner,
+        mol2_width=mol1_w,
+        mol2_height=mol1_h,
+        mol2_inner_svg=mol1_inner,
         highlights=highlights,
         arrow_labels=arrow_labels,
     )
