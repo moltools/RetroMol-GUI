@@ -167,6 +167,11 @@ export const DialogViewItem: React.FC<DialogViewItemProps> = ({
           <Typography variant="body1">
             To get started, select a primary sequence to map onto the input compound structure.
             A downloadable SVG will be generated showing the mapping below the selector upon successful mapping.
+            All structures in this view are drawn using&nbsp;
+            <MuiLink href="https://research.wur.nl/en/publications/pikachu-a-python-based-informatics-kit-for-analysing-chemical-uni/" target="_blank" rel="noopener noreferrer">
+              PIKAChU
+            </MuiLink>
+            &nbsp;. Please cite PIKAChU if you use these drawings in your work.
           </Typography>
           <FormControl fullWidth size="small">
             <Select
@@ -207,6 +212,7 @@ export const DialogViewItem: React.FC<DialogViewItemProps> = ({
             &nbsp;output.
             This wrapper viewer around RAIChU currently does not use any of the PARAS substrate specificity predictions provided and used by RetroMol for similarity searches.
             Additionally, this wrapper view around RAIChU only provided a visualization of the full region readout, not of individual candidate clusters found within the region.
+            Please cite RAIChU if you use these drawings in your work.
           </Typography>
           {svg && (
             <SvgViewer

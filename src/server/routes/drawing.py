@@ -98,119 +98,211 @@ def rgba_to_hex(rgba: tuple[float, float, float]) -> str:
     return f"#{r_i:02x}{g_i:02x}{b_i:02x}"
 
 
-def add_motif_legend_to_svg(
-    svg_str: str,
+def extract_svg_body(svg_str: str) -> tuple[float, float, str]:
+    """
+    Extract width, height and inner content from an SVG string.
+
+    :param svg_str: SVG string
+    :return: tuple of (width, height, inner SVG content)
+    :raises ValueError: if SVG tag or dimensions cannot be parsed
+    """
+    # Find opening <svg ...> tag
+    m = re.search(r"<svg[^>]*>", svg_str)
+    if not m:
+        raise ValueError("No <svg> tag found in RDKit/PIKAChU SVG")
+
+    svg_open_tag = m.group(0)
+    inner = svg_str[m.end():]
+    # Remove closing tag
+    inner = inner.replace("</svg>", "")
+
+    width_match = re.search(r'width=(["\'])([\d.]+)(?:px)?\1', svg_open_tag)
+    height_match = re.search(r'height=(["\'])([\d.]+)(?:px)?\1', svg_open_tag)
+
+    if not width_match or not height_match:
+        raise ValueError("Could not parse width/height from SVG header")
+
+    width = float(width_match.group(2))
+    height = float(height_match.group(2))
+
+    return width, height, inner
+
+
+def build_compound_scheme_svg(
+    mol_width: float,
+    mol_height: float,
+    mol_inner_svg: str,
     highlights: list[Highlight],
-    legend_height: float = 40.0,
+    arrow_labels: list[str] | None = None,
 ) -> str:
     """
-    Extend RDKit SVG with a legend row of motif boxes under the molecule.
+    Build a full SVG with: [structure] --arrow--> [structure] --arrow--> [primary sequence]
 
-    :param svg_str: original SVG string
-    :param highlights: list of Highlight objects for the motifs
-    :param legend_height: height of the legend row
-    :return: modified SVG string with legend   
+    :param mol_width: width of single molecule drawing
+    :param mol_height: height of single molecule drawing
+    :param mol_inner_svg: inner SVG content of molecule (no outer <svg> tags)
+    :param highlights: motif info for the primary sequence panel
+    :param arrow_labels: optional labels above the arrows, e.g. ["step 1", "step 2"]
     """
-    if not highlights:
-        return svg_str
+    arrow_labels = arrow_labels or ["", ""]
 
-    # Parse current width/height from <svg ...> tag
-    width_match = re.search(r"width=(['\"])([\d.]+)(?:px)?\1", svg_str)
-    height_match = re.search(r"height=(['\"])([\d.]+)(?:px)?\1", svg_str)
-    if not width_match or not height_match:
-        return svg_str  # bail out safely
+    # Layout constants
+    PADDING = 20.0
+    H_GAP = 25.0  # gap between elements
+    ARROW_LEN = 120.0
+    AVG_CHAR_WIDTH = 7.0
+    MIN_BOX_WIDTH = 40.0
+    H_TEXT_PADDING = 14.0
+    SEQ_BOX_HEIGHT = 24.0
+    SEQ_BOX_GAP = 4.0
 
-    width_quote = width_match.group(1)
-    width = float(width_match.group(2))
-    old_height = float(height_match.group(2))
-    new_height = old_height + legend_height
-
-    # --- layout params for legend boxes ---
-    BOX_WIDTH = 48.0    # width per motif box (enough for 3 chars)
-    PADDING_X = 8.0     # padding at left and right of legend row
-
-    n = len(highlights)
-    if n == 0:
-        return svg_str
-
-    needed_width = BOX_WIDTH * n + 2 * PADDING_X
-
-    # Decide final SVG width for layout of legend
-    if needed_width <= width:
-        svg_width_final = width
-        # no width change, just center boxes
-    else:
-        svg_width_final = needed_width
-        # widen the SVG, preserve quote style
-        svg_str = re.sub(
-            r"width=(['\"])([\d.]+)(?:px)?\1",
-            f"width={width_quote}{svg_width_final}px{width_quote}",
-            svg_str,
-            count=1,
+    n_motifs = len(highlights)
+    if n_motifs > 0:
+        seq_panel_height = (
+            2 * PADDING +
+            n_motifs * SEQ_BOX_HEIGHT +
+            (n_motifs - 1) * SEQ_BOX_GAP
         )
+    else:
+        seq_panel_height = 2 * PADDING + SEQ_BOX_HEIGHT
 
-    # Update height attribute, preserving quote style
-    height_quote = height_match.group(1)
-    svg_str = re.sub(
-        r"height=(['\"])([\d.]+)(?:px)?\1",
-        f"height={height_quote}{new_height}px{height_quote}",
-        svg_str,
-        count=1,
+    content_height = max(mol_height, seq_panel_height)
+    total_height = content_height + 2 * PADDING
+
+    # X positions
+    mol1_x = PADDING
+    mol1_y = (total_height - mol_height) / 2.0
+
+    arrow1_x1 = mol1_x + mol_width + H_GAP
+    arrow1_x2 = arrow1_x1 + ARROW_LEN
+
+    mol2_x = arrow1_x2 + H_GAP
+    mol2_y = mol1_y
+
+    arrow2_x1 = mol2_x + mol_width + H_GAP
+    arrow2_x2 = arrow2_x1 + ARROW_LEN
+
+    seq_x = arrow2_x2 + H_GAP
+    seq_y = (total_height - seq_panel_height) / 2.0
+
+    widest_box = max(
+        max(MIN_BOX_WIDTH, len(h.display_name) * AVG_CHAR_WIDTH + H_TEXT_PADDING)
+        for h in highlights
+    ) if highlights else MIN_BOX_WIDTH
+
+    seq_panel_width = widest_box + 2 * PADDING
+
+    total_width = seq_x + seq_panel_width + PADDING
+
+    arrow_y = total_height / 2.0
+    arrow_label_offset = 12.0  # distance above arrow for text
+
+    # Assemble SVG
+    svg_parts: list[str] = []
+
+    svg_parts.append(
+        f'<svg xmlns="http://www.w3.org/2000/svg" '
+        f'width="{total_width:.2f}" height="{total_height:.2f}" '
+        f'viewBox="0 0 {total_width:.2f} {total_height:.2f}">'
     )
 
-    # Update viewBox='0 0 W H' (single or double quotes)
-    vb_match = re.search(r"viewBox=(['\"])0 0 ([\d.]+) ([\d.]+)\1", svg_str)
-    if vb_match:
-        vb_quote = vb_match.group(1)
-        vb_w = float(vb_match.group(2))
-        vb_h = float(vb_match.group(3))
-        new_vb_w = max(vb_w, needed_width)
-        new_vb_h = vb_h + legend_height
-        # NOTE: we keep vb_w as-is so the molecule isn’t rescaled horizontally
-        svg_str = re.sub(
-            r"viewBox=(['\"])0 0 ([\d.]+) ([\d.]+)\1",
-            f"viewBox={vb_quote}0 0 {new_vb_w} {new_vb_h}{vb_quote}",
-            svg_str,
-            count=1,
+    # Arrowhead marker
+    svg_parts.append(
+        """
+        <defs>
+          <marker id="arrowhead" markerWidth="10" markerHeight="7"
+                  refX="10" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" />
+          </marker>
+        </defs>
+        """
+    )
+
+    # First molecule
+    svg_parts.append(
+        f'<g transform="translate({mol1_x:.2f},{mol1_y:.2f})">'
+        f'{mol_inner_svg}'
+        '</g>'
+    )
+
+    # Second molecule
+    svg_parts.append(
+        f'<g transform="translate({mol2_x:.2f},{mol2_y:.2f})">'
+        f'{mol_inner_svg}'
+        '</g>'
+    )
+
+    # Arrow 1
+    svg_parts.append(
+        f'<line x1="{arrow1_x1:.2f}" y1="{arrow_y:.2f}" '
+        f'x2="{arrow1_x2:.2f}" y2="{arrow_y:.2f}" '
+        f'stroke="black" stroke-width="1.5" marker-end="url(#arrowhead)" />'
+    )
+    if arrow_labels[0]:
+        mid_x1 = (arrow1_x1 + arrow1_x2) / 2.0
+        svg_parts.append(
+            f'<text x="{mid_x1:.2f}" y="{arrow_y - arrow_label_offset:.2f}" '
+            f'text-anchor="middle" font-size="12">{arrow_labels[0]}</text>'
         )
 
-    # Layout: fixed-width boxes, centered as a block
-    legend_y = old_height  # start right below the original drawing
-    legend_elems: list[str] = []
+    # Arrow 2
+    svg_parts.append(
+        f'<line x1="{arrow2_x1:.2f}" y1="{arrow_y:.2f}" '
+        f'x2="{arrow2_x2:.2f}" y2="{arrow_y:.2f}" '
+        f'stroke="black" stroke-width="1.5" marker-end="url(#arrowhead)" />'
+    )
+    if arrow_labels[1]:
+        mid_x2 = (arrow2_x1 + arrow2_x2) / 2.0
+        svg_parts.append(
+            f'<text x="{mid_x2:.2f}" y="{arrow_y - arrow_label_offset:.2f}" '
+            f'text-anchor="middle" font-size="12">{arrow_labels[1]}</text>'
+        )
 
-    # center the set of boxes within svg_width_final
-    start_x = (svg_width_final - needed_width) / 2.0 + PADDING_X
+    # Primary sequence panel on the right (vertical legend)
+    # Draw background panel (optional, can remove if you don’t want it)
+    title_text = "primary sequence"
+    title_font_size = 14.0
 
-    for i, h in enumerate(highlights):
-        box_x = start_x + i * BOX_WIDTH
-        box_y = legend_y
+    title_x = seq_x + seq_panel_width / 2.0
+    title_y = seq_y - 6.0
 
+    svg_parts.append(
+        f'<text x="{title_x:.2f}" y="{title_y:.2f}" '
+        f'text-anchor="middle" font-size="{title_font_size}" '
+        f'font-weight="bold">{title_text}</text>'
+    )
+
+    svg_parts.append(
+        f'<rect x="{seq_x:.2f}" y="{seq_y:.2f}" '
+        f'width="{seq_panel_width:.2f}" height="{seq_panel_height:.2f}" '
+        f'rx="4" ry="4" fill="white" stroke="#dddddd" />'
+    )
+
+    current_y = seq_y + PADDING
+    for h in highlights:
         fill_hex = rgba_to_hex(h.color)
-
-        rect = (
-            f'<rect x="{box_x:.2f}" y="{box_y:.2f}" '
-            f'width="{BOX_WIDTH:.2f}" height="{legend_height:.2f}" '
-            f'fill="{fill_hex}" />'
+        # Box
+        text_len = len(h.display_name)
+        box_width = max(MIN_BOX_WIDTH, text_len * AVG_CHAR_WIDTH + H_TEXT_PADDING)
+        svg_parts.append(
+            f'<rect x="{seq_x + PADDING:.2f}" y="{current_y:.2f}" '
+            f'width="{box_width:.2f}" height="{SEQ_BOX_HEIGHT:.2f}" '
+            f'rx="3" ry="3" fill="{fill_hex}" stroke="black" />'
         )
-
-        text_x = box_x + BOX_WIDTH / 2.0
-        text_y = box_y + legend_height / 2.0
-
-        text = (
+        # Text in middle
+        text_x = seq_x + PADDING + box_width / 2.0
+        text_y = current_y + SEQ_BOX_HEIGHT / 2.0
+        svg_parts.append(
             f'<text x="{text_x:.2f}" y="{text_y:.2f}" '
             f'text-anchor="middle" dominant-baseline="middle" '
-            f'font-size="14" fill="black">{h.display_name}</text>'
+            f'font-size="12">{h.display_name}</text>'
         )
 
-        legend_elems.append(rect)
-        legend_elems.append(text)
+        current_y += SEQ_BOX_HEIGHT + SEQ_BOX_GAP
 
-    legend_group = '<g id="motif-legend">' + "".join(legend_elems) + "</g>"
+    svg_parts.append("</svg>")
 
-    # Inject legend just before the closing </svg>
-    svg_str = svg_str.replace("</svg>", legend_group + "</svg>")
-
-    return svg_str
+    return "".join(svg_parts)
 
 
 def draw_structure_with_pikachu(drawer: Drawer) -> str:
@@ -359,10 +451,14 @@ def draw_highlights(
     else:
         raise ValueError(f"Unknown drawing engine: {engine}")
     
-    # Inject motif legend
-    svg_str = add_motif_legend_to_svg(
-        svg_str=mol_svg_str,
+    mol_w, mol_h, mol_inner = extract_svg_body(mol_svg_str)
+    arrow_labels = ["preprocess", "sequence"]
+    svg_str = build_compound_scheme_svg(
+        mol_width=mol_w,
+        mol_height=mol_h,
+        mol_inner_svg=mol_inner,
         highlights=highlights,
+        arrow_labels=arrow_labels,
     )
 
     return svg_str
@@ -388,15 +484,9 @@ def draw_compound_item():
     highlights: list[Highlight] = []
     palette = [c.normalize() for c in Palette]
     for motif_idx, motif in enumerate(primary_sequence.get("sequence", [])):
-        # Format display name
-        display_name = motif.get("name", "")
-        default_display_name = f"M{motif_idx+1:02d}"
-        if display_name:
-            display_name = "".join(re.findall(r"[A-Za-z0-9]", display_name))[:3].upper()
-            if display_name == "":
-                display_name = default_display_name
-        else:
-            display_name = default_display_name
+        display_name = motif.get("name", None)
+        if not display_name:
+            display_name = f"motif {motif_idx + 1}"
 
         color = palette[motif_idx % len(palette)]
         tags = motif.get("tags", [])
