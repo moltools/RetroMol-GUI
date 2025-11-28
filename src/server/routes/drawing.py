@@ -21,25 +21,13 @@ blp_draw_gene_cluster_item = Blueprint("draw_gene_cluster_item", __name__)
 
 
 class Palette(Enum):
-    Red = (230, 25, 75)
-    Blue = (0, 130, 200)
-    Green = (60, 180, 75)
-    Maroon = (128, 0, 0)
-    Brown = (170, 110, 40)
-    Olive = (128, 128, 0)
-    Teal = (0, 128, 128)
-    Navy = (0, 0, 128)
-    Orange = (245, 130, 48)
-    Yellow = (255, 225, 25)
-    Lime = (210, 245, 60)
-    Cyan = (70, 240, 240)
-    Purple = (145, 30, 180)
-    Magenta = (240, 50, 230)
-    Pink = (255, 190, 212)
-    Apricot = (255, 215, 180)
-    Beige = (255, 250, 200)
-    Mint = (170, 255, 195)
-    Lavender = (220, 190, 255)
+    Orange = (230, 159, 0)
+    SkyBlue = (86, 180, 233)
+    Green = (3, 158, 115)
+    Yellow = (240, 228, 66)
+    Blue = (0, 114, 178)
+    Red = (213, 95, 0)
+    Pink = (204, 121, 167)
 
     def hex(self, alpha: float) -> str:
         """
