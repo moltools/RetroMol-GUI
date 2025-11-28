@@ -30,6 +30,7 @@ export type PrimarySequenceMotif = z.output<typeof PrimarySequenceMotifSchema>;
 export const PrimarySequenceSchema = z.object({
   id: z.string(),
   name: z.string().nullable().optional(),
+  parentSmilesTagged: z.string().nullable().optional(),
   sequence: z.array(PrimarySequenceMotifSchema).min(1),
 })
 

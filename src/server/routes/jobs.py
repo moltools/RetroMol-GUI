@@ -20,7 +20,7 @@ from retromol.fingerprint import (
 )
 from retromol.io import Input as RetroMolInput
 from retromol.rules import get_path_default_matching_rules
-from retromol.readout import linear_readout as retromol_linear_readout
+from routes._retromol import retromol_linear_readout
 from biocracker.antismash import parse_region_gbk_file
 from biocracker.readout import NRPSModuleReadout, PKSModuleReadout, linear_readouts as biocracker_linear_readouts
 from biocracker.text_mining import get_default_tokenspecs, mine_virtual_tokens
@@ -93,15 +93,21 @@ def _compute_compound(generator: FingerprintGenerator, smiles: str) -> tuple[str
     result = run_retromol(input_data)
 
     # Retrieve tagged SMILES from result
-    tagged_smiles = result.get_input_smiles(remove_tags=False)
+    tagged_smiles_input = result.get_input_smiles(remove_tags=False)
 
     # Calculate coverage
     cov = result.best_total_coverage()
 
     # Calculate linear readouts
-    readout = retromol_linear_readout(result, require_identified=False)
+    readout = retromol_linear_readout(result, require_identified=False)  # TODO: change to "global_best" mode
     linear_readouts = []
     for level_idx, level in enumerate(readout["levels"]):
+        
+        # We need the tagged parent SMILES for visualization
+        parent_smiles_tagged = level.get("parent_smiles_tagged", None)
+        if not parent_smiles_tagged:
+            raise ValueError("Missing parent_smiles_tagged in level data")
+
         for path_idx, path in enumerate(level["strict_paths"]):
             ms = path["ordered_monomers"]
             if len(ms) <= 2: continue  # skip too short
@@ -141,11 +147,13 @@ def _compute_compound(generator: FingerprintGenerator, smiles: str) -> tuple[str
             linear_readouts.append({
                 "id": get_unique_identifier(),
                 "name": f"level{level_idx}_path{path_idx}_fwd",
+                "parentSmilesTagged": parent_smiles_tagged,
                 "sequence": ms_fwd,
             })
             linear_readouts.append({
                 "id": get_unique_identifier(),
                 "name": f"level{level_idx}_path{path_idx}_rev",
+                "parentSmilesTagged": parent_smiles_tagged,
                 "sequence": ms_rev,
             })
 
@@ -156,7 +164,7 @@ def _compute_compound(generator: FingerprintGenerator, smiles: str) -> tuple[str
     fp_hex_strings = [bits_to_hex(fp) for fp in fps] if len(fps) > 0 else [np.zeros((512,), dtype=bool)]
 
     return (
-        tagged_smiles,
+        tagged_smiles_input,
         [cov for _ in range(len(fp_hex_strings))],
         fp_hex_strings,
         linear_readouts
@@ -288,6 +296,7 @@ def _compute_gene_cluster(generator: FingerprintGenerator, itemId: str, gbk_str:
                 linear_readouts.append({
                     "id": get_unique_identifier(),
                     "name": f"{itemId}_readout_{len(linear_readouts)+1}",
+                    "parentSmilesTagged": None,
                     "sequence": linear_readout,
                 })
 

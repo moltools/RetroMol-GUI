@@ -267,6 +267,7 @@ export const WorkspaceItemCard: React.FC<WorkspaceItemCardProps> = ({
               e.stopPropagation();
               onView(item.id);
             }}
+            disabled={!isDone}
           >
             <VisibilityIcon fontSize="small" />
           </IconButton>
