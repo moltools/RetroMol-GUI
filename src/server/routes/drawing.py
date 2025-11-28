@@ -8,13 +8,10 @@ from dataclasses import dataclass
 from flask import Blueprint, request, jsonify
 from rdkit.Chem.Draw.rdMolDraw2D import DrawMoleculeACS1996, MolDraw2DSVG, MolDrawOptions
 from retromol.chem import smiles_to_mol
-from raichu.run_raichu import (
-    ClusterRepresentation,
-    ModuleRepresentation,
-    DomainRepresentation,
-    draw_cluster,
-)
-from raichu.antismash import parse_antismash_domains_gbk, get_nrps_pks_modules
+from raichu.run_raichu import draw_cluster
+from raichu.antismash import get_nrps_pks_modules
+from pikachu.general import read_smiles
+from pikachu.drawing.drawing import Drawer, Options
 
 
 blp_draw_compound_item = Blueprint("draw_compound_item", __name__)
@@ -87,12 +84,12 @@ class Highlight:
     color: tuple[float, float, float]
 
 
-def rgba_to_hex_opacity(rgba: tuple[float, float, float]) -> str:
+def rgba_to_hex(rgba: tuple[float, float, float]) -> str:
     """
-    Convert RGBA tuple to hex color string and opacity.
+    Convert RGBA tuple to hex color string.
     
     :param rgba: RGBA color tuple
-    :return: tuple of hex color string and opacity
+    :return: tuple of hex color string
     """
     r, g, b = rgba
     r_i = int(r * 255)
@@ -108,7 +105,11 @@ def add_motif_legend_to_svg(
 ) -> str:
     """
     Extend RDKit SVG with a legend row of motif boxes under the molecule.
-    Boxes have a fixed width that fits 3 characters.
+
+    :param svg_str: original SVG string
+    :param highlights: list of Highlight objects for the motifs
+    :param legend_height: height of the legend row
+    :return: modified SVG string with legend   
     """
     if not highlights:
         return svg_str
@@ -184,7 +185,7 @@ def add_motif_legend_to_svg(
         box_x = start_x + i * BOX_WIDTH
         box_y = legend_y
 
-        fill_hex = rgba_to_hex_opacity(h.color)
+        fill_hex = rgba_to_hex(h.color)
 
         rect = (
             f'<rect x="{box_x:.2f}" y="{box_y:.2f}" '
@@ -212,10 +213,49 @@ def add_motif_legend_to_svg(
     return svg_str
 
 
+def draw_structure_with_pikachu(drawer: Drawer) -> str:
+    """
+    Draw a molecular structure using Pikachu and return the SVG string.
+
+    :param drawer: Drawer object with the molecular structure
+    :return: SVG string of the drawn structure
+    """
+    drawer.flip_y_axis()
+    drawer.move_to_positive_coords()
+    drawer.convert_to_int()
+
+    min_x = 100000000
+    max_x = -100000000
+    min_y = 100000000
+    max_y = -100000000
+
+    for atom in drawer.structure.graph:
+        if atom.draw.positioned:
+            if atom.draw.position.x < min_x:
+                min_x = atom.draw.position.x
+            if atom.draw.position.y < min_y:
+                min_y = atom.draw.position.y
+            if atom.draw.position.x > max_x:
+                max_x = atom.draw.position.x
+            if atom.draw.position.y > max_y:
+                max_y = atom.draw.position.y
+
+    width = max_x - min_x + 2 * drawer.options.padding
+    height = max_y - min_y + 2 * drawer.options.padding
+
+    svg_string = f"""<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg">"""
+    svg_string += drawer.svg_style
+    svg_string += drawer.draw_svg(annotation=None, numbered_atoms=None)
+    svg_string += "</svg>"
+
+    return svg_string
+
+
 def draw_highlights(
     tagged_parent_smiles: str,
     highlights: list[Highlight],
     background_color: str | None = None,
+    engine: str = "rdkit",
 ) -> None:
     """
     Draw highlights on a molecule given its tagged SMILES representation.
@@ -223,60 +263,102 @@ def draw_highlights(
     :param tagged_parent_smiles: SMILES string of the tagged parent molecule
     :param highlights: list of Highlight objects specifying tags and alpha values
     :param background_color: optional background color in hex format
+    :param engine: drawing engine to use, either "rdkit" or "pikachu"
     :return: SVG string of the drawn molecule with highlights
+    :raises ValueError: if an unknown drawing engine is specified
     """
-    tagged_parent = smiles_to_mol(tagged_parent_smiles)
-    drawing: MolDraw2DSVG = MolDraw2DSVG(-1, -1)
+    if engine == "rdkit":
+        tagged_parent = smiles_to_mol(tagged_parent_smiles)
+        drawing: MolDraw2DSVG = MolDraw2DSVG(-1, -1)
 
-    atoms_to_highlight: list[int] = []
-    bonds_to_highlight: list[int] = []
-    atom_highlight_colors: dict[int, tuple[float, float, float]] = {}
-    bond_highlight_colors: dict[int, tuple[float, float, float]] = {}
+        atoms_to_highlight: list[int] = []
+        bonds_to_highlight: list[int] = []
+        atom_highlight_colors: dict[int, tuple[float, float, float]] = {}
+        bond_highlight_colors: dict[int, tuple[float, float, float]] = {}
 
-    for highlight in highlights:
-        color = highlight.color
-        n_tags = highlight.tags
+        for highlight in highlights:
+            color = highlight.color
+            n_tags = highlight.tags
 
+            for atom in tagged_parent.GetAtoms():
+                a_tag = atom.GetIsotope()
+                if a_tag in n_tags:
+                    a_idx = atom.GetIdx()
+                    atoms_to_highlight.append(a_idx)
+                    atom_highlight_colors[a_idx] = color
+
+            for bond in tagged_parent.GetBonds():
+                b_begin_idx = bond.GetBeginAtom()
+                b_end_idx = bond.GetEndAtom()
+                b_begin_tag = b_begin_idx.GetIsotope()
+                b_end_tag = b_end_idx.GetIsotope()
+                if b_begin_tag in n_tags and b_end_tag in n_tags:
+                    b_idx = bond.GetIdx()
+                    bonds_to_highlight.append(b_idx)
+                    bond_highlight_colors[b_idx] = color
+
+        options: MolDrawOptions = drawing.drawOptions()
+        if background_color is not None:
+            options.setBackgroundColour(hex_to_rgb_tuple(background_color))
+        options.useBWAtomPalette()
+
+        # Remove isotopic labels for drawing
+        cp_tagged_parent = deepcopy(tagged_parent)
+        for atom in cp_tagged_parent.GetAtoms():
+            atom.SetIsotope(0)
+
+        # drawing.DrawMolecule(
+        DrawMoleculeACS1996(
+            drawing,
+            cp_tagged_parent,
+            highlightAtoms=atoms_to_highlight,
+            highlightBonds=bonds_to_highlight,
+            highlightAtomColors=atom_highlight_colors,
+            highlightBondColors=bond_highlight_colors,
+        )
+
+        drawing.FinishDrawing()
+        mol_svg_str = drawing.GetDrawingText().replace("svg:", "")
+    
+    elif engine == "pikachu":
+        # We have to translate isotope-stored tags from the SMILES to atom.nr in PIKAChU
+        # PIKAChU also labels hydrogen atoms, which we have to ignore for the highlights
+
+        # Create mapping: isotope tag to idx (read order in SMILES)
+        tag_to_idx = {}
+        tagged_parent = smiles_to_mol(tagged_parent_smiles)
         for atom in tagged_parent.GetAtoms():
-            a_tag = atom.GetIsotope()
-            if a_tag in n_tags:
-                a_idx = atom.GetIdx()
-                atoms_to_highlight.append(a_idx)
-                atom_highlight_colors[a_idx] = color
+            idx = atom.GetIdx()
+            tag = atom.GetIsotope()
+            if tag > 0:
+                tag_to_idx[tag] = idx
 
-        for bond in tagged_parent.GetBonds():
-            b_begin_idx = bond.GetBeginAtom()
-            b_end_idx = bond.GetEndAtom()
-            b_begin_tag = b_begin_idx.GetIsotope()
-            b_end_tag = b_end_idx.GetIsotope()
-            if b_begin_tag in n_tags and b_end_tag in n_tags:
-                b_idx = bond.GetIdx()
-                bonds_to_highlight.append(b_idx)
-                bond_highlight_colors[b_idx] = color
+        # First map every tag to its corresponding Highlight's color
+        color_map = {}
+        for highlight in highlights:
+            for tag in highlight.tags:
+                if tag in tag_to_idx:
+                    atom_idx = tag_to_idx[tag]
+                    color_map[atom_idx + 1] = rgba_to_hex(highlight.color)
+        
+        # Now create a lookup of every non-hydogen atom
+        # PIKAChU reads the SMILES string from left-to-right so we can just count
+        structure = read_smiles(tagged_parent_smiles)
+        non_h_count = 0
+        for atom in structure.get_atoms():
+            if atom.type == "H":
+                continue
+            
+            non_h_count += 1
+            atom.draw.colour = color_map.get(non_h_count, "black")
 
-    options: MolDrawOptions = drawing.drawOptions()
-    if background_color is not None:
-        options.setBackgroundColour(hex_to_rgb_tuple(background_color))
-    options.useBWAtomPalette()
-
-    # Remove isotopic labels for drawing
-    cp_tagged_parent = deepcopy(tagged_parent)
-    for atom in cp_tagged_parent.GetAtoms():
-        atom.SetIsotope(0)
-
-    # drawing.DrawMolecule(
-    DrawMoleculeACS1996(
-        drawing,
-        cp_tagged_parent,
-        highlightAtoms=atoms_to_highlight,
-        highlightBonds=bonds_to_highlight,
-        highlightAtomColors=atom_highlight_colors,
-        highlightBondColors=bond_highlight_colors,
-    )
-
-    drawing.FinishDrawing()
-    mol_svg_str = drawing.GetDrawingText().replace("svg:", "")
-
+        options = Options()
+        drawer = Drawer(structure, options=options, coords_only=True, kekulise=True)
+        mol_svg_str = draw_structure_with_pikachu(drawer)
+    
+    else:
+        raise ValueError(f"Unknown drawing engine: {engine}")
+    
     # Inject motif legend
     svg_str = add_motif_legend_to_svg(
         svg_str=mol_svg_str,
@@ -329,6 +411,7 @@ def draw_compound_item():
         tagged_parent_smiles=tagged_parent_smiles,
         highlights=highlights,
         background_color=payload.get("backgroundColor", None),
+        engine="pikachu",
     )
     
     return jsonify({"svg": svg_str}), 200
