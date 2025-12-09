@@ -2,6 +2,7 @@
 
 import tempfile
 import time
+import dataclasses
 
 import numpy as np
 from flask import Blueprint, current_app, request, jsonify
@@ -20,6 +21,7 @@ from retromol.fingerprint import (
 )
 from retromol.io import Input as RetroMolInput
 from retromol.rules import get_path_default_matching_rules
+from retromol.helpers import blake64_hex
 from routes._retromol import retromol_linear_readout
 from biocracker.antismash import parse_region_gbk_file
 from biocracker.readout import NRPSModuleReadout, PKSModuleReadout, linear_readouts as biocracker_linear_readouts
@@ -36,6 +38,7 @@ blp_submit_gene_cluster = Blueprint("submit_gene_cluster", __name__)
 COLLAPSE_BY_NAME = {
     "glycosylation": ["glycosyltransferase"],
     "methylation": ["methyltransferase"],
+    "siderophore": ["siderophore"],
 }
 
 
@@ -55,6 +58,53 @@ def _set_item_status_inplace(item: dict, status: str, error_message: str | None 
     else:
         if "errorMessage" in item:
             item["errorMessage"] = None
+
+
+def _stable_name_token(nm: str) -> str:
+    # Deterministic, case-insensitive token for raw names / name-groups
+    return f"NM:{blake64_hex('NAMEGROUP:' + (nm or '').lower())}"
+
+
+def add_name_group(generator: FingerprintGenerator, name: str) -> None:
+    """
+    Ensure there is a name-based group for `name` in the generator.
+
+    If such a group already exists, this is a no-op (except ensuring
+    the name is in collapse_by_name). If it doesn't exist, we clone
+    an existing name-group as a template and add a new one.
+    """
+    # 1) Does a name-group for this name already exist?
+    for g in generator.groups:
+        if getattr(g, "kind", None) == "name" and getattr(g, "name_key", None) == name:
+            # Make sure it's in collapse_by_name
+            if name not in (generator.collapse_by_name or []):
+                generator.collapse_by_name.append(name)
+            return
+
+    # 2) Find a template name-group to clone
+    try:
+        template = next(g for g in generator.groups if getattr(g, "kind", None) == "name")
+    except StopIteration:
+        raise RuntimeError("No existing name-based Group found to clone as a template")
+
+    # 3) Build a new token for this name-group
+    token_fine = _stable_name_token(name)
+
+    # 4) Clone the template and modify fields; adjust to your actual Group schema if needed
+    new_group = dataclasses.replace(
+        template,
+        name_key=name,
+        token_fine=token_fine,
+    )
+
+    # 5) Append to generator state
+    generator.groups.append(new_group)
+    if name not in (generator.collapse_by_name or []):
+        generator.collapse_by_name.append(name)
+
+    # 6) Invalidate caches, since group set changed
+    generator._assign_cache.clear()
+    generator._token_bytes_cache.clear()
 
 
 def _setup_fingerprint_generator() -> FingerprintGenerator:
@@ -77,6 +127,7 @@ def _setup_fingerprint_generator() -> FingerprintGenerator:
         collapse_by_name=collapse_by_name,
         name_similarity=cfg
     )
+    add_name_group(generator, "siderophore")
     return generator
 
 
@@ -160,6 +211,29 @@ def _compute_compound(generator: FingerprintGenerator, smiles: str) -> tuple[str
     # Generate retrofingerprints
     fps: np.ndarray = generator.fingerprint_from_result(result, num_bits=512, counted=False) # shape [N, 512] where N>=1
 
+    # Check linear readouts for any family tokens to add
+    family_tokens = set()
+    for lr in linear_readouts:
+        for monomer in lr["sequence"]:
+            monomer_id = monomer.get("name", None)
+            siderophore_related = [
+                "N-(5-aminopentyl)hydroxylamine"
+            ]
+            if monomer_id in siderophore_related:
+                family_tokens.add("siderophore")
+
+    # Create fingerprint for just family tokens
+    if family_tokens:
+        kmers = [[(token_name, None)] for token_name in family_tokens]
+        family_fp: np.ndarray = generator.fingerprint_from_kmers(kmers, num_bits=512, counted=False)
+
+        # If bits of family token fingerprints are not yet flipped in fps, flip them now
+        for fp in fps:
+            # if there are bit sin family_fp not set in fp, set them
+            for bit_idx in np.where(family_fp)[0]:
+                if not fp[bit_idx]:
+                    fp[bit_idx] = True
+
     # Convert retrofingerprints to hex strings
     fp_hex_strings = [bits_to_hex(fp) for fp in fps] if len(fps) > 0 else [np.zeros((512,), dtype=bool)]
 
@@ -186,11 +260,11 @@ def _compute_gene_cluster(generator: FingerprintGenerator, itemId: str, gbk_str:
         temp_gbk_file.flush()
         gbk_path = temp_gbk_file.name
 
-        # Configure tokenspecs
-        tokenspecs = get_default_tokenspecs()
-
         # Parse gene cluster file
         targets = parse_region_gbk_file(gbk_path, top_level="cand_cluster")  # 'region' or 'cand_cluster' top level
+
+    # Configure tokenspecs
+    tokenspecs = get_default_tokenspecs()
 
     # Generate readouts
     level = "gene"  # 'rec' or 'gene' level
@@ -264,10 +338,23 @@ def _compute_gene_cluster(generator: FingerprintGenerator, itemId: str, gbk_str:
                             "smiles": None,
                             "morganfingerprint2048r2": None,
                         })
+                    case PKSModuleReadout(module_type="UNCLASSIFIED") as m:
+                        kmer.append(("A", None))
+                        pred_vals.append(1.0)
+                        linear_readout.append({
+                            "id": get_unique_identifier(),
+                            "name": "A",
+                            "displayName": None,
+                            "tags": [],
+                            "smiles": None,
+                            "morganfingerprint2048r2": None,
+                        })
                     case NRPSModuleReadout() as m:
                         substrate_name = m.get("substrate_name", None)
                         substrate_smiles = m.get("substrate_smiles", None)
                         substrate_score = m.get("score", 0.0)
+                        if substrate_score is None:
+                            substrate_score = 0.0
                         kmer.append((substrate_name, substrate_smiles))
                         pred_vals.append(substrate_score)
 
@@ -287,18 +374,20 @@ def _compute_gene_cluster(generator: FingerprintGenerator, itemId: str, gbk_str:
                             "smiles": substrate_smiles,
                             "morganfingerprint2048r2": morgan_fp_hex,
                         })
-                    case _: raise ValueError("Unknown module readout type")
+                    case _:
+                        print(module)
+                        raise ValueError("Unknown module readout type")
 
             if len(kmer) > 0:
                 raw_kmers.append(kmer)
 
-            if len(linear_readout) >= 2:  # skip too short
-                linear_readouts.append({
-                    "id": get_unique_identifier(),
-                    "name": f"{itemId}_readout_{len(linear_readouts)+1}",
-                    "parentSmilesTagged": None,
-                    "sequence": linear_readout,
-                })
+            # if len(linear_readout) >= 2:  # skip too short
+            linear_readouts.append({
+                "id": get_unique_identifier(),
+                "name": f"{itemId}_readout_{len(linear_readouts)+1}",
+                "parentSmilesTagged": None,
+                "sequence": linear_readout,
+            })
 
         # Mine for kmers of lengths 1 to 3
         kmers = []
