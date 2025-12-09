@@ -87,17 +87,16 @@ QUERIES = {
                     WHEN rf.biocracker_genbank_id IS NOT NULL AND rf.retromol_compound_id IS NULL THEN 'gene_cluster'
                     ELSE 'unknown'
                 END AS type,
-                cr.source AS source,
-                cr.ext_id AS ext_id,
-                cr.name AS name,
+                COALESCE(cr.source, gr.source) AS source,
+                COALESCE(cr.ext_id, gr.ext_id) AS ext_id,
+                COALESCE(cr.name, CONCAT('Region ', gr.ext_id::text)) AS name,
                 (1.0 - (rf.fp_retro_b512_vec_binary <=> %(qv)s)) AS score
             FROM retrofingerprint AS rf
-            LEFT JOIN retromol_compound rmc
-            ON rmc.id = rf.retromol_compound_id
-            LEFT JOIN compound c
-            ON c.id = rmc.compound_id
-            LEFT join compound_record cr
-            ON cr.compound_id = c.id
+            LEFT JOIN retromol_compound rmc ON rmc.id = rf.retromol_compound_id
+            LEFT JOIN compound c ON c.id = rmc.compound_id
+            LEFT join compound_record cr ON cr.compound_id = c.id
+            LEFT JOIN biocracker_genbank bg ON bg.id = rf.biocracker_genbank_id
+            LEFT JOIN genbank_region gr ON gr.id = bg.genbank_region_id
             WHERE vector_norm(rf.fp_retro_b512_vec_binary) > 0
             AND vector_norm(%(qv)s) > 0
             AND (1.0 - (rf.fp_retro_b512_vec_binary <=> %(qv)s)) >= %(similarity_threshold)s
