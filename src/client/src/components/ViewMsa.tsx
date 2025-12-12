@@ -768,11 +768,15 @@ export const ViewMsa: React.FC<ViewMsaProps> = ({
 
     const svgWidth = padding * 2 + labelW + motifPx * msaLength;
     const svgHeight = padding * 2 + rowHeight * visible.length;
+    const lineSpan = Math.max(0, msaLength - 1) * motifPx;
 
     const rowsSvg = visible
       .map((row, rIdx) => {
         const y = padding + rIdx * rowHeight;
         const labelText = escapeSvgText(row.name || row.id || "row");
+        const lineX1 = padding + labelW;
+        const lineX2 = lineX1 + lineSpan + motifPx;
+        const lineY = y + rowHeight / 2;
         const cells = row.sequence
           .slice(0, msaLength)
           .map((motif, cIdx) => {
@@ -796,6 +800,10 @@ export const ViewMsa: React.FC<ViewMsaProps> = ({
             <text x="${padding + textPadding}" y="${y + 3+ rowHeight / 2}"
               font-family="Helvetica" font-size="7.18" font-weight="600"
               dominant-baseline="middle">${labelText}</text>
+            ${lineSpan > 0
+              ? `<line x1="${lineX1}" x2="${lineX2}" y1="${lineY}" y2="${lineY}"
+                  stroke="#9e9e9e" stroke-width="0.9" />`
+              : ""}
             ${cells}
           </g>`;
       })
