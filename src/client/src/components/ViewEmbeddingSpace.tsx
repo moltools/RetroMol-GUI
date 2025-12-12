@@ -1,8 +1,10 @@
 import React from "react";
 import Box from "@mui/material/Box";
 import Alert from "@mui/material/Alert";
+import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import CircularProgress from "@mui/material/CircularProgress";
+import DownloadIcon from "@mui/icons-material/Download";
 import { ScatterChart } from "@mui/x-charts/ScatterChart";
 import Stack from "@mui/material/Stack";
 import ToggleButton from "@mui/material/ToggleButton";
@@ -89,6 +91,38 @@ export const ViewEmbeddingSpace: React.FC<ViewEmbeddingSpaceProps> = ({
 
     return Array.from(byKind.values());
   }, [points, parentById]);
+
+  // Download scatter series as TSV
+  const handleDownloadEmbeddingData = () => {
+    if (!points || points.length === 0) return;
+
+    const header = ["id", "kind", "nane", "x", "y"];
+    const rows = points.map((p) => {
+      const parent = parentById.get(p.parent_id) ?? null;
+      const parentName = parent ? parent.name : "unknown";
+      const childIds = parent?.retrofingerprints.map((fp) => fp.id) || [];
+      const childIdx = childIds.indexOf(p.child_id);
+      return [
+        p.child_id,
+        p.kind,
+        `Readout ${childIdx >= 0 ? `${childIdx + 1}` : ""} ${parentName} `,
+        p.x.toString(),
+        p.y.toString(),
+      ];
+    });
+    const tsvContent = [header, ...rows]
+      .map((row) => row.join("\t"))
+      .join("\n");
+    const blob = new Blob([tsvContent], { type: "text/tab-separated-values" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `embedding_space_${session.sessionId}.tsv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   // Changes only when the contents of items changes, not just because of polling
   const itemsKey = React.useMemo(() => {
@@ -253,6 +287,15 @@ export const ViewEmbeddingSpace: React.FC<ViewEmbeddingSpaceProps> = ({
             }}
           >
             <Stack direction="row" justifyContent="right" alignItems="center" sx={{ mb: 1 }}>
+              <Tooltip title="Download embedding data as TSV">
+                <DownloadIcon
+                  sx={{
+                    cursor: "pointer",
+                    mr: 1,
+                  }}
+                  onClick={handleDownloadEmbeddingData}
+                />
+              </Tooltip>
               <ToggleButtonGroup
                 value={embeddingMethod}
                 exclusive
