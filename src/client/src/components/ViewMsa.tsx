@@ -11,6 +11,7 @@ import RefreshIcon from "@mui/icons-material/Refresh";
 import PaletteIcon from "@mui/icons-material/Palette";
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
 import SettingsIcon from "@mui/icons-material/Settings";
+import DownloadIcon from "@mui/icons-material/Download";
 import { useNotifications } from "./NotificationProvider";
 import { Session, MsaSettings, MsaState, MsaSequence, PrimarySequence } from "../features/session/types";
 import { runMsa } from "../features/views/api";
@@ -34,6 +35,69 @@ const toDisplayName = (name: string | null): string | null => {
   const alphanumeric = name.replace(/[^a-z0-9]/gi, "");
   return alphanumeric.slice(0, 3).toUpperCase();
 };
+
+const toHex = (v: number) => v.toString(16).padStart(2, "0");
+
+const hslToRgb = (h: number, s: number, l: number) => {
+  // h: 0–360, s/l: 0–1
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+  const pick = (hp: number) =>
+    hp < 60 ? [c, x, 0] :
+    hp < 120 ? [x, c, 0] :
+    hp < 180 ? [0, c, x] :
+    hp < 240 ? [0, x, c] :
+    hp < 300 ? [x, 0, c] :
+    [c, 0, x];
+  const [r1, g1, b1] = pick(h);
+  return [
+    Math.round((r1 + m) * 255),
+    Math.round((g1 + m) * 255),
+    Math.round((b1 + m) * 255),
+  ];
+};
+
+const normalizeColor = (raw: string | undefined | null) => {
+  if (!raw) return "#f5f5f5";
+  const c = raw.trim();
+
+  // Already hex (#rgb, #rrggbb, #rrggbbaa)
+  if (/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(c)) return c;
+
+  // rgba()/rgb()
+  const rgba = c.match(/^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(?:\s*,\s*([\d.]+))?\s*\)$/i);
+  if (rgba) {
+    const [r, g, b, aRaw] = rgba.slice(1).map(Number);
+    const a = isNaN(aRaw) ? 1 : Math.max(0, Math.min(1, aRaw));
+    // composite over white to avoid transparency issues
+    const blend = (v: number) => Math.round((1 - a) * 255 + a * v);
+    return `#${toHex(blend(r))}${toHex(blend(g))}${toHex(blend(b))}`;
+  }
+
+  // hsla()/hsl()
+  const hsla = c.match(/^hsla?\(\s*([\d.]+)(?:deg)?\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%(?:\s*,\s*([\d.]+))?\s*\)$/i);
+  if (hsla) {
+    const h = Number(hsla[1]);
+    const s = Number(hsla[2]) / 100;
+    const l = Number(hsla[3]) / 100;
+    const a = hsla[4] === undefined ? 1 : Math.max(0, Math.min(1, Number(hsla[4])));
+    const [r, g, b] = hslToRgb(h, s, l);
+    const blend = (v: number) => Math.round((1 - a) * 255 + a * v);
+    return `#${toHex(blend(r))}${toHex(blend(g))}${toHex(blend(b))}`;
+  }
+
+  // Fallback
+  return "#f5f5f5";
+};
+
+const escapeSvgText = (value: string) => 
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 
 interface SortableRowProps {
   row: MsaSequence;
@@ -618,6 +682,77 @@ export const ViewMsa: React.FC<ViewMsaProps> = ({
     }
   }
 
+  const buildMsaSvg = () => {
+    const visible = msa.filter(row => !hiddenIds.has(row.id as string));
+    if (visible.length === 0) return "";
+
+    const motifPx = 19.1955;
+    const rowHeight = 13.8131;
+    const labelW = 80;
+    const padding = 10;
+    const textPadding = 6;
+
+    const svgWidth = padding * 2 + labelW + motifPx * msaLength;
+    const svgHeight = padding * 2 + rowHeight * visible.length;
+
+    const rowsSvg = visible
+      .map((row, rIdx) => {
+        const y = padding + rIdx * rowHeight;
+        const labelText = escapeSvgText(row.name || row.id || "row");
+        const cells = row.sequence
+          .slice(0, msaLength)
+          .map((motif, cIdx) => {
+            const x = padding + labelW + cIdx * motifPx;
+            const isPad = (motif.id ?? "").startsWith("pad-");
+            if (isPad) return "";
+            const fill = normalizeColor(session.settings.motifColorPalette[motif.name || ""]);
+            const text = escapeSvgText(
+              toDisplayName(motif.displayName || motif.name || null) || "UNK"
+            );
+            return `
+              <g>
+                <rect x="${x}" y="${y}" width="${motifPx}" height="${rowHeight}"
+                  rx="4" ry="4" fill="${fill}" stroke="#000000" stroke-width="0.8977" />
+                <text x="${x + motifPx / 2}" y="${y + 3 + rowHeight / 2}"
+                  font-family="Helvetica" font-size="7.18" font-weight="600" fill="#000"
+                  dominant-baseline="middle" text-anchor="middle">${text}</text>
+              </g>`;
+          })
+          .join("");
+        return `
+          <g>
+            <text x="${padding + textPadding}" y="${y + 3+ rowHeight / 2}"
+              font-family="Helvetica" font-size="7.18" font-weight="600"
+              dominant-baseline="middle">${labelText}</text>
+            ${cells}
+          </g>`;
+      })
+      .join("");
+
+    return `
+      <svg xmlns="http://www.w3.org/2000/svg" width="${svgWidth}" height="${svgHeight}">
+        <rect x="0" y="0" width="${svgWidth}" height="${svgHeight}" fill="#ffffff"/>
+        ${rowsSvg}
+      </svg>`;
+  };
+
+  const handleDownloadMsaSvg = () => {
+    const svg = buildMsaSvg();
+    if (!svg) {
+      pushNotification("No visible sequences to download.", "warning");
+      return;
+    }
+    const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `msa_${session.sessionId}.svg`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <Box sx={{ maxWidth: "100vw", overflowX: "hidden" }}>
       <Stack direction="column" spacing={2}>
@@ -715,6 +850,12 @@ export const ViewMsa: React.FC<ViewMsaProps> = ({
               <Tooltip title="Change color palette">
                 <PaletteIcon
                   onClick={() => setColorPaletteDialogOpen(true)}
+                  sx={{ cursor: "pointer" }}
+                />
+              </Tooltip>
+              <Tooltip title="Download MSA as SVG">
+                <DownloadIcon
+                  onClick={handleDownloadMsaSvg}
                   sx={{ cursor: "pointer" }}
                 />
               </Tooltip>
