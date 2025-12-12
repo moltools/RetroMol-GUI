@@ -29,11 +29,80 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 
-// Helper: turn a name into a display name by keeping only alphanumerics, capitalizing, and taking up to 3 characters
-const toDisplayName = (name: string | null): string | null => {
-  if (!name) return null;
-  const alphanumeric = name.replace(/[^a-z0-9]/gi, "");
-  return alphanumeric.slice(0, 3).toUpperCase();
+export const PROTECTED_NAME_TO_CODE: Record<string, string> = {
+  ALANINE: "ALA",
+  CYSTEINE: "CYS",
+  ASPARTICACID: "ASP",
+  GLUTAMICACID: "GLU",
+  PHENYLALANINE: "PHE",
+  GLYCINE: "GLY",
+  HISTIDINE: "HIS",
+  ISOLEUCINE: "ILE",
+  LYSINE: "LYS",
+  LEUCINE: "LEU",
+  METHIONINE: "MET",
+  ASPARAGINE: "ASN",
+  PROLINE: "PRO",
+  GLUTAMINE: "GLN",
+  ARGININE: "ARG",
+  SERINE: "SER",
+  THREONINE: "THR",
+  VALINE: "VAL",
+  TRYPTOPHAN: "TRP",
+  TYROSINE: "TYR",
+};
+
+
+export const makeToDisplayName = (protectedNameToCode: Record<string, string>) => {
+  const norm = (s: string) => s.replace(/[^a-z0-9]/gi, "").toUpperCase();
+
+  // normalize protected names + reserve protected codes
+  const prot = new Map<string, string>(
+    Object.entries(protectedNameToCode).map(([k, v]) => [norm(k), norm(v)])
+  );
+  const reserved = new Set<string>(Array.from(prot.values())); // e.g. ALA, GLY
+  const used = new Set<string>(reserved);                      // block others from taking them
+  const cache = new Map<string, string>();                     // per-name stability
+
+  const candidates = (s: string) => {
+    const out: string[] = [];
+    if (s.length >= 3) {
+      out.push(s.slice(0, 3)); // ABC
+      for (let i = 3; i < s.length; i++) out.push(s[0] + s[1] + s[i]); // AB?
+      for (let i = 2; i < s.length; i++) out.push(s[0] + s[i - 1] + s[i]); // A??
+    }
+    if (s.length >= 2) out.push(s.slice(0, 2)); // AB
+    if (s.length >= 1) out.push(s[0]);          // A
+    // de-dupe in order
+    const seen = new Set<string>();
+    return out.filter(c => c.length <= 3 && !seen.has(c) && (seen.add(c), true));
+  };
+
+  return (name: string | null): string | null => {
+    if (!name) return null;
+    const s = norm(name);
+    if (!s) return null;
+
+    const hit = cache.get(s);
+    if (hit) return hit;
+
+    // ONLY protected full names get protected 3-letter codes
+    const canonical = prot.get(s);
+    if (canonical) {
+      cache.set(s, canonical);
+      return canonical;
+    }
+
+    // don’t let non-protected names steal reserved AA codes
+    for (const c of candidates(s)) {
+      if (!used.has(c)) {
+        used.add(c);
+        cache.set(s, c);
+        return c;
+      }
+    }
+    return null;
+  };
 };
 
 const toHex = (v: number) => v.toString(16).padStart(2, "0");
@@ -279,6 +348,11 @@ export const ViewMsa: React.FC<ViewMsaProps> = ({
   const handleZoomOut = () => setZoom(z => Math.max(z - 0.1, 0.5));
   const [colorPaletteDialogOpen, setColorPaletteDialogOpen] = React.useState(false);
   const [msaSettingsDialogOpen, setMsaSettingsDialogOpen] = React.useState(false);
+
+  const toDisplayName = React.useMemo(
+    () => makeToDisplayName(PROTECTED_NAME_TO_CODE),
+    [session.sessionId]
+  )
 
   const handleColorPaletteSave = (newMap: Record<string, string>) => {
     setSession(prev => ({
@@ -706,9 +780,7 @@ export const ViewMsa: React.FC<ViewMsaProps> = ({
             const isPad = (motif.id ?? "").startsWith("pad-");
             if (isPad) return "";
             const fill = normalizeColor(session.settings.motifColorPalette[motif.name || ""]);
-            const text = escapeSvgText(
-              toDisplayName(motif.displayName || motif.name || null) || "UNK"
-            );
+            const text = escapeSvgText(toDisplayName(motif.name || null) || "UNK");
             return `
               <g>
                 <rect x="${x}" y="${y}" width="${motifPx}" height="${rowHeight}"
@@ -928,7 +1000,7 @@ export const ViewMsa: React.FC<ViewMsaProps> = ({
                                         arrow
                                       >
                                         <Chip
-                                          label={toDisplayName(motif.displayName || motif.name || null) || "UNK"}
+                                          label={toDisplayName(motif.name || null) || "UNK"}
                                           size="small"
                                           sx={{
                                             mt: "-4px",
