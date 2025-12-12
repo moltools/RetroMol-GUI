@@ -21,6 +21,7 @@ import { DataGrid, GridColDef, GridPaginationModel } from "@mui/x-data-grid";
 import NotificationsRoundedIcon from "@mui/icons-material/NotificationsRounded";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import SettingsIcon from "@mui/icons-material/Settings";
+import DownloadIcon from "@mui/icons-material/Download";
 import { useTheme } from "@mui/material/styles";
 import { Link as RouterLink } from "react-router-dom";
 import { useNotifications } from "../components/NotificationProvider";
@@ -73,6 +74,42 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
   const [enrichmentLoading, setEnrichmentLoading] = React.useState(false);
   const [enrichmentError, setEnrichmentError] = React.useState<string | null>(null);
   const [enrichmentResult, setEnrichmentResult] = React.useState<EnrichmentResult | null>(null);
+
+  const handleDownloadQueryResults = () => {
+    if (!queryResult || queryResult.rows.length === 0) return;
+
+    const tsvHeader = queryResult.columns.join("\t");
+    const tsvRows = queryResult.rows.map((row) =>
+      queryResult.columns.map((col) => row[col] ?? "").join("\t")
+    );
+    const tsvContent = [tsvHeader, ...tsvRows].join("\n");
+
+    const blob = new Blob([tsvContent], { type: "text/tab-separated-values" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `query_results_session_${session.sessionId}.tsv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  const handleDownloadEnrichmentResults = () => {
+    if (!enrichmentResult || enrichmentResult.items.length === 0) return;
+    
+    const tsvHeader = ["id", "schema", "key", "value", "adjusted_p_value"].join("\t");
+    const tsvRows = enrichmentResult.items.map((item) =>
+      [item.id, item.schema, item.key, item.value, item.adjusted_p_value].join("\t")
+    );
+    const tsvContent = [tsvHeader, ...tsvRows].join("\n");
+
+    const blob = new Blob([tsvContent], { type: "text/tab-separated-values" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `enrichment_results_session_${session.sessionId}.tsv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   const [paginationModelEnrichment, setPaginationModelEnrichment] = React.useState<GridPaginationModel>({
     pageSize: 10,
@@ -612,9 +649,20 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
         <Grid size={{ xs: 12, md: 6 }} sx={{ display: "flex" }}>
           <Card variant="outlined" sx={{ display: "flex", "flexDirection": "column", flex: 1 }}>
             <CardContent sx={{ display: "flex", flexDirection: "column" }}>
-              <Typography component="h1" variant="subtitle1">
-                Query results
-              </Typography>
+              <Stack direction="row" spacing={1} alignItems="center" mb={1}>
+                <Typography component="h1" variant="subtitle1">
+                  Query results
+                </Typography>
+                <Tooltip title="Download query results as TSV" arrow>
+                  <DownloadIcon
+                    fontSize="small"
+                    onClick={handleDownloadQueryResults}
+                    sx={{
+                      cursor: queryResult && queryResult.rows.length > 0 ? "pointer" : "not-allowed",
+                    }}
+                  />
+                </Tooltip>
+              </Stack>
               {rows.length === 0 && !queryLoading ? (
                 <Typography variant="body2">
                   {queryResult ? "No results returned." : "Run a query to see results."}
@@ -671,9 +719,20 @@ export const WorkspaceQuery: React.FC<WorkspaceQueryProps> = ({ session, setSess
         <Grid size={{ xs: 12, md: 6 }} sx={{ display: "flex" }}>
           <Card variant="outlined" sx={{ display: "flex", "flexDirection": "column", flex: 1 }}>
             <CardContent sx={{ display: "flex", flexDirection: "column", flex: 1 }}>
-              <Typography component="h1" variant="subtitle1">
-                Enrichment results
-              </Typography>
+              <Stack direction="row" spacing={1} alignItems="center" mb={1}>
+                <Typography component="h1" variant="subtitle1">
+                  Enrichment results
+                </Typography>
+                <Tooltip title="Download enrichment results as TSV" arrow>
+                  <DownloadIcon
+                    fontSize="small"
+                    onClick={handleDownloadEnrichmentResults}
+                    sx={{
+                      cursor: enrichmentResult && enrichmentResult.items.length > 0 ? "pointer" : "not-allowed",
+                    }}
+                  />
+                </Tooltip>
+              </Stack>
               {enrichmentLoading ? (
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                   <CircularProgress size={20} />

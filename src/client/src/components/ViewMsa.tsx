@@ -11,6 +11,7 @@ import RefreshIcon from "@mui/icons-material/Refresh";
 import PaletteIcon from "@mui/icons-material/Palette";
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
 import SettingsIcon from "@mui/icons-material/Settings";
+import DownloadIcon from "@mui/icons-material/Download";
 import { useNotifications } from "./NotificationProvider";
 import { Session, MsaSettings, MsaState, MsaSequence, PrimarySequence } from "../features/session/types";
 import { runMsa } from "../features/views/api";
@@ -28,12 +29,144 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 
-// Helper: turn a name into a display name by keeping only alphanumerics, capitalizing, and taking up to 3 characters
-const toDisplayName = (name: string | null): string | null => {
-  if (!name) return null;
-  const alphanumeric = name.replace(/[^a-z0-9]/gi, "");
-  return alphanumeric.slice(0, 3).toUpperCase();
+export const PROTECTED_NAME_TO_CODE: Record<string, string> = {
+  ALANINE: "ALA",
+  CYSTEINE: "CYS",
+  ASPARTICACID: "ASP",
+  GLUTAMICACID: "GLU",
+  PHENYLALANINE: "PHE",
+  GLYCINE: "GLY",
+  HISTIDINE: "HIS",
+  ISOLEUCINE: "ILE",
+  LYSINE: "LYS",
+  LEUCINE: "LEU",
+  METHIONINE: "MET",
+  ASPARAGINE: "ASN",
+  PROLINE: "PRO",
+  GLUTAMINE: "GLN",
+  ARGININE: "ARG",
+  SERINE: "SER",
+  THREONINE: "THR",
+  VALINE: "VAL",
+  TRYPTOPHAN: "TRP",
+  TYROSINE: "TYR",
 };
+
+
+export const makeToDisplayName = (protectedNameToCode: Record<string, string>) => {
+  const norm = (s: string) => s.replace(/[^a-z0-9]/gi, "").toUpperCase();
+
+  // normalize protected names + reserve protected codes
+  const prot = new Map<string, string>(
+    Object.entries(protectedNameToCode).map(([k, v]) => [norm(k), norm(v)])
+  );
+  const reserved = new Set<string>(Array.from(prot.values())); // e.g. ALA, GLY
+  const used = new Set<string>(reserved);                      // block others from taking them
+  const cache = new Map<string, string>();                     // per-name stability
+
+  const candidates = (s: string) => {
+    const out: string[] = [];
+    if (s.length >= 3) {
+      out.push(s.slice(0, 3)); // ABC
+      for (let i = 3; i < s.length; i++) out.push(s[0] + s[1] + s[i]); // AB?
+      for (let i = 2; i < s.length; i++) out.push(s[0] + s[i - 1] + s[i]); // A??
+    }
+    if (s.length >= 2) out.push(s.slice(0, 2)); // AB
+    if (s.length >= 1) out.push(s[0]);          // A
+    // de-dupe in order
+    const seen = new Set<string>();
+    return out.filter(c => c.length <= 3 && !seen.has(c) && (seen.add(c), true));
+  };
+
+  return (name: string | null): string | null => {
+    if (!name) return null;
+    const s = norm(name);
+    if (!s) return null;
+
+    const hit = cache.get(s);
+    if (hit) return hit;
+
+    // ONLY protected full names get protected 3-letter codes
+    const canonical = prot.get(s);
+    if (canonical) {
+      cache.set(s, canonical);
+      return canonical;
+    }
+
+    // don’t let non-protected names steal reserved AA codes
+    for (const c of candidates(s)) {
+      if (!used.has(c)) {
+        used.add(c);
+        cache.set(s, c);
+        return c;
+      }
+    }
+    return null;
+  };
+};
+
+const toHex = (v: number) => v.toString(16).padStart(2, "0");
+
+const hslToRgb = (h: number, s: number, l: number) => {
+  // h: 0–360, s/l: 0–1
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+  const pick = (hp: number) =>
+    hp < 60 ? [c, x, 0] :
+    hp < 120 ? [x, c, 0] :
+    hp < 180 ? [0, c, x] :
+    hp < 240 ? [0, x, c] :
+    hp < 300 ? [x, 0, c] :
+    [c, 0, x];
+  const [r1, g1, b1] = pick(h);
+  return [
+    Math.round((r1 + m) * 255),
+    Math.round((g1 + m) * 255),
+    Math.round((b1 + m) * 255),
+  ];
+};
+
+const normalizeColor = (raw: string | undefined | null) => {
+  if (!raw) return "#f5f5f5";
+  const c = raw.trim();
+
+  // Already hex (#rgb, #rrggbb, #rrggbbaa)
+  if (/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(c)) return c;
+
+  // rgba()/rgb()
+  const rgba = c.match(/^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(?:\s*,\s*([\d.]+))?\s*\)$/i);
+  if (rgba) {
+    const [r, g, b, aRaw] = rgba.slice(1).map(Number);
+    const a = isNaN(aRaw) ? 1 : Math.max(0, Math.min(1, aRaw));
+    // composite over white to avoid transparency issues
+    const blend = (v: number) => Math.round((1 - a) * 255 + a * v);
+    return `#${toHex(blend(r))}${toHex(blend(g))}${toHex(blend(b))}`;
+  }
+
+  // hsla()/hsl()
+  const hsla = c.match(/^hsla?\(\s*([\d.]+)(?:deg)?\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%(?:\s*,\s*([\d.]+))?\s*\)$/i);
+  if (hsla) {
+    const h = Number(hsla[1]);
+    const s = Number(hsla[2]) / 100;
+    const l = Number(hsla[3]) / 100;
+    const a = hsla[4] === undefined ? 1 : Math.max(0, Math.min(1, Number(hsla[4])));
+    const [r, g, b] = hslToRgb(h, s, l);
+    const blend = (v: number) => Math.round((1 - a) * 255 + a * v);
+    return `#${toHex(blend(r))}${toHex(blend(g))}${toHex(blend(b))}`;
+  }
+
+  // Fallback
+  return "#f5f5f5";
+};
+
+const escapeSvgText = (value: string) => 
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 
 interface SortableRowProps {
   row: MsaSequence;
@@ -215,6 +348,11 @@ export const ViewMsa: React.FC<ViewMsaProps> = ({
   const handleZoomOut = () => setZoom(z => Math.max(z - 0.1, 0.5));
   const [colorPaletteDialogOpen, setColorPaletteDialogOpen] = React.useState(false);
   const [msaSettingsDialogOpen, setMsaSettingsDialogOpen] = React.useState(false);
+
+  const toDisplayName = React.useMemo(
+    () => makeToDisplayName(PROTECTED_NAME_TO_CODE),
+    [session.sessionId]
+  )
 
   const handleColorPaletteSave = (newMap: Record<string, string>) => {
     setSession(prev => ({
@@ -618,6 +756,83 @@ export const ViewMsa: React.FC<ViewMsaProps> = ({
     }
   }
 
+  const buildMsaSvg = () => {
+    const visible = msa.filter(row => !hiddenIds.has(row.id as string));
+    if (visible.length === 0) return "";
+
+    const motifPx = 19.1955;
+    const rowHeight = 13.8131;
+    const labelW = 80;
+    const padding = 10;
+    const textPadding = 6;
+
+    const svgWidth = padding * 2 + labelW + motifPx * msaLength;
+    const svgHeight = padding * 2 + rowHeight * visible.length;
+    const lineSpan = Math.max(0, msaLength - 1) * motifPx;
+
+    const rowsSvg = visible
+      .map((row, rIdx) => {
+        const y = padding + rIdx * rowHeight;
+        const labelText = escapeSvgText(row.name || row.id || "row");
+        const lineX1 = padding + labelW;
+        const lineX2 = lineX1 + lineSpan + motifPx;
+        const lineY = y + rowHeight / 2;
+        const cells = row.sequence
+          .slice(0, msaLength)
+          .map((motif, cIdx) => {
+            const x = padding + labelW + cIdx * motifPx;
+            const isPad = (motif.id ?? "").startsWith("pad-");
+            if (isPad) return "";
+            const fill = normalizeColor(session.settings.motifColorPalette[motif.name || ""]);
+            const text = escapeSvgText(toDisplayName(motif.name || null) || "UNK");
+            return `
+              <g>
+                <rect x="${x}" y="${y}" width="${motifPx}" height="${rowHeight}"
+                  rx="4" ry="4" fill="${fill}" stroke="#000000" stroke-width="0.8977" />
+                <text x="${x + motifPx / 2}" y="${y + 3 + rowHeight / 2}"
+                  font-family="Helvetica" font-size="7.18" font-weight="600" fill="#000"
+                  dominant-baseline="middle" text-anchor="middle">${text}</text>
+              </g>`;
+          })
+          .join("");
+        return `
+          <g>
+            <text x="${padding + textPadding}" y="${y + 3+ rowHeight / 2}"
+              font-family="Helvetica" font-size="7.18" font-weight="600"
+              dominant-baseline="middle">${labelText}</text>
+            ${lineSpan > 0
+              ? `<line x1="${lineX1}" x2="${lineX2}" y1="${lineY}" y2="${lineY}"
+                  stroke="#9e9e9e" stroke-width="0.9" />`
+              : ""}
+            ${cells}
+          </g>`;
+      })
+      .join("");
+
+    return `
+      <svg xmlns="http://www.w3.org/2000/svg" width="${svgWidth}" height="${svgHeight}">
+        <rect x="0" y="0" width="${svgWidth}" height="${svgHeight}" fill="#ffffff"/>
+        ${rowsSvg}
+      </svg>`;
+  };
+
+  const handleDownloadMsaSvg = () => {
+    const svg = buildMsaSvg();
+    if (!svg) {
+      pushNotification("No visible sequences to download.", "warning");
+      return;
+    }
+    const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `msa_${session.sessionId}.svg`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <Box sx={{ maxWidth: "100vw", overflowX: "hidden" }}>
       <Stack direction="column" spacing={2}>
@@ -718,6 +933,12 @@ export const ViewMsa: React.FC<ViewMsaProps> = ({
                   sx={{ cursor: "pointer" }}
                 />
               </Tooltip>
+              <Tooltip title="Download MSA as SVG">
+                <DownloadIcon
+                  onClick={handleDownloadMsaSvg}
+                  sx={{ cursor: "pointer" }}
+                />
+              </Tooltip>
             </Box>
           </Box>
         </Stack>
@@ -787,7 +1008,7 @@ export const ViewMsa: React.FC<ViewMsaProps> = ({
                                         arrow
                                       >
                                         <Chip
-                                          label={toDisplayName(motif.displayName || motif.name || null) || "UNK"}
+                                          label={toDisplayName(motif.name || null) || "UNK"}
                                           size="small"
                                           sx={{
                                             mt: "-4px",
