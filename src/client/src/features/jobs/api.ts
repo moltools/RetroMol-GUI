@@ -32,6 +32,7 @@ export async function submitCompoundJob(
 export async function submitGeneClusterJob(
   sessionId: string,
   item: GeneClusterItem,
+  readoutLevel: "rec" | "gene",
 ): Promise<void> {
   await postJson(
     "/api/submitGeneCluster",
@@ -40,6 +41,7 @@ export async function submitGeneClusterJob(
       itemId: item.id,
       name: item.name,
       fileContent: item.fileContent,
+      readoutLevel: readoutLevel,
     },
     SubmitJobRespSchema
   )
@@ -236,7 +238,8 @@ export async function importCompoundById(
 // Submit gene clusters
 export async function importGeneClustersBatch(
   deps: WorkspaceImportDeps,
-  clusters: NewGeneClusterJob[]
+  clusters: NewGeneClusterJob[],
+  readoutLevel: "rec" | "gene",
 ): Promise<SessionItem[]> {
   const { pushNotification, setSession, sessionId } = deps;
 
@@ -310,7 +313,7 @@ export async function importGeneClustersBatch(
   // Submit jobs for each new gene cluster (sequential)
   for (const item of newItems) {
     try {
-      await submitGeneClusterJob(sessionId, item as GeneClusterItem);
+      await submitGeneClusterJob(sessionId, item as GeneClusterItem, readoutLevel);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       pushNotification(`Failed to submit job for gene cluster "${item.name}": ${msg}`, "error");
@@ -338,8 +341,9 @@ export async function importGeneClustersBatch(
 export async function importGeneCluster(
   deps: WorkspaceImportDeps,
   payload: NewGeneClusterJob,
+  readoutLevel: "rec" | "gene",
 ): Promise<SessionItem | null> {
-  const items = await importGeneClustersBatch(deps, [payload]);
+  const items = await importGeneClustersBatch(deps, [payload], readoutLevel);
   return items[0] ?? null;
 }
 

@@ -3,6 +3,7 @@
 import tempfile
 import time
 import dataclasses
+from typing import Literal
 
 import numpy as np
 from flask import Blueprint, current_app, request, jsonify
@@ -245,13 +246,19 @@ def _compute_compound(generator: FingerprintGenerator, smiles: str) -> tuple[str
     )
 
 
-def _compute_gene_cluster(generator: FingerprintGenerator, itemId: str, gbk_str: str) -> tuple[list[float], list[str], list[dict]]:
+def _compute_gene_cluster(
+    generator: FingerprintGenerator,
+    itemId: str,
+    gbk_str: str,
+    readout_level: Literal["rec", "gene"] = "gene",
+) -> tuple[list[float], list[str], list[dict]]:
     """
     Dummy function to compute a 512-bit fingerprint as a hex string (128 chars).
 
     :param generator: the fingerprint generator instance
     :param itemId: the ID of the gene cluster item
     :param gbk_str: the GenBank file content as a string
+    :param readout_level: the readout level, either "rec" or "gene"
     :return: tuple of (list of average prediction values, list of fingerprint hex strings, list of linear readouts)
     """
     # Write gbk_str to a temporary file
@@ -267,15 +274,16 @@ def _compute_gene_cluster(generator: FingerprintGenerator, itemId: str, gbk_str:
     tokenspecs = get_default_tokenspecs()
 
     # Generate readouts
-    level = "gene"  # 'rec' or 'gene' level
+    level = readout_level  # "rec" or "gene"
     avg_pred_vals, fps, linear_readouts = [], [], []
-    for target in targets:
+    for target_idx, target in enumerate(targets):
         pred_vals = []
         raw_kmers = []
 
         # Mine for tokenspecs (i.e., family tokens)
         for mined_tokenspec in mine_virtual_tokens(target, tokenspecs):
             if token_spec := mined_tokenspec.get("token"):
+                print(f"  Found token_spec: {token_spec}")
                 for token_name, values in COLLAPSE_BY_NAME.items():
                     if token_spec in values:
                         raw_kmers.append([(token_name, None)])
@@ -384,7 +392,7 @@ def _compute_gene_cluster(generator: FingerprintGenerator, itemId: str, gbk_str:
             # if len(linear_readout) >= 2:  # skip too short
             linear_readouts.append({
                 "id": get_unique_identifier(),
-                "name": f"{itemId}_readout_{len(linear_readouts)+1}",
+                "name": f"{itemId}_readout_{len(linear_readouts)+1}_{level}_{target_idx}",
                 "parentSmilesTagged": None,
                 "sequence": linear_readout,
             })
@@ -543,6 +551,11 @@ def submit_gene_cluster()  -> tuple[dict[str, str], int]:
     item_id = payload.get("itemId")
     name = payload.get("name")
     file_content = payload.get("fileContent")
+    readout_level = payload.get("readoutLevel", None)
+
+    if readout_level not in ("rec", "gene"):
+        current_app.logger.error(f"submit_gene_cluster: invalid readoutLevel={readout_level}")
+        return jsonify({"error": "Invalid readoutLevel; must be 'rec' or 'gene'"}), 400
 
     current_app.logger.info(f"submit_gene_cluster called: session_id={session_id} item_id={item_id}")
 
@@ -586,7 +599,7 @@ def submit_gene_cluster()  -> tuple[dict[str, str], int]:
     try:
         # Heavy work
         generator = _setup_fingerprint_generator()
-        scores, fp_hex_strings, readout = _compute_gene_cluster(generator, item_id, file_content)
+        scores, fp_hex_strings, readout = _compute_gene_cluster(generator, item_id, file_content, readout_level)
         
         # Set final status=done and store results on this item only
         def mark_done(it: dict) -> None:

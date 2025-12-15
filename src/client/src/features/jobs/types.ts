@@ -30,6 +30,7 @@ export const NewCompoundJobSchema = BaseNewJobSchema.extend({
 
 export const NewGeneClusterJobSchema = BaseNewJobSchema.extend({
   fileContent: z.string().min(1, "File content cannot be empty"),
+  readoutLevel: z.enum(["rec", "gene"]),
 })
 
 export type NewCompoundJob = z.infer<typeof NewCompoundJobSchema>;
