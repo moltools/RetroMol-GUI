@@ -18,6 +18,35 @@ SESSION_PREFIX = "session:"
 ITEM_PREFIX = "session_item:"  # key pattern: session_item:{sessionId}:{itemId}
 
 
+EVENTS_CHANNEL_PREFIX = "session_events:"
+
+
+def _event_channel(session_id: str) -> str:
+    """
+    Get the Redis Pub/Sub channel name for session events.
+    
+    :param session_id: the session ID
+    :return: the Redis channel name for session events
+    """
+    return f"{EVENTS_CHANNEL_PREFIX}{session_id}"
+
+
+def publish_session_event(session_id: str, event: dict[str, Any]) -> None:
+    """
+    Publish a session event to the Redis Pub/Sub channel.
+
+    :param session_id: the session ID
+    :param event: the event data to publish
+    """
+    try:
+        event = dict(event)
+        event.setdefault("sessionId", session_id)
+        event.setdefault("ts", int(time.time() * 1000))
+        redis_client.publish(_event_channel(session_id), json.dumps(event))
+    except Exception:
+        pass
+
+
 def _get_redis() -> "redis.Redis":
     """
     Get a Redis client instance.
@@ -305,6 +334,14 @@ def update_item(session_id: str, item_id: str, mutator: Callable[[dict[str, Any]
     mutator(item)
 
     save_item(session_id, item)
+
+    publish_session_event(session_id, {
+        "type": "item_updated",
+        "itemId": item_id,
+        "status": item.get("status"),
+        "updatedAt": item.get("updatedAt"),
+    })
+
     return True
     
 
@@ -398,3 +435,8 @@ def merge_session_from_client(new_session: dict[str, Any]) -> None:
         json.dumps(meta),
         ex=SESSION_TTL_SECONDS,
     )
+
+    # Publish session updated event
+    publish_session_event(session_id, {
+        "type": "session_merged",
+    })

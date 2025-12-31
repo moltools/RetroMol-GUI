@@ -5,6 +5,7 @@ import os
 import time
 
 from flask import Flask, jsonify
+from flask_cors import CORS
 
 from routes.session import (
     blp_create_session,
@@ -27,10 +28,21 @@ from routes.drawing import (
     blp_draw_compound_item,
     blp_draw_gene_cluster_item,
 )
+from routes.events import blp_events
 
 
 # Initialize the Flask app
 app = Flask(__name__)
+
+CORS(
+    app,
+    resources={
+        r"/api/*": {
+            "origins": ["http://localhost:3000"],
+        }
+    },
+    supports_credentials=True,
+)
 
 # Logging setup
 # In development: simple basicConfig
@@ -156,3 +168,4 @@ app.register_blueprint(blp_enrich)
 app.register_blueprint(blp_run_msa)
 app.register_blueprint(blp_draw_compound_item)
 app.register_blueprint(blp_draw_gene_cluster_item)
+app.register_blueprint(blp_events)
