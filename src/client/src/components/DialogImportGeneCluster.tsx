@@ -9,12 +9,16 @@ type DialogImportGeneClusterProps = {
   open: boolean;
   onClose: () => void;
   onImport: (files: File[]) => void;
+  readoutLevel: "rec" | "gene";
+  setReadoutLevel: (level: "rec" | "gene") => void;
 }
 
 export const DialogImportGeneCluster: React.FC<DialogImportGeneClusterProps> = ({
   open,
   onClose,
   onImport,
+  readoutLevel,
+  setReadoutLevel,
 }) => {
   const [gbkFiles, setGbkFiles] = React.useState<File[]>([]);
   const canImport = gbkFiles.length > 0;
@@ -46,6 +50,32 @@ export const DialogImportGeneCluster: React.FC<DialogImportGeneClusterProps> = (
             antiSMASH
           </MuiLink>
           &nbsp;output files for best compatibility.
+        </Typography>
+        <Typography>
+          Choose readout level:&nbsp;
+          <MuiLink
+            component="button"
+            variant="body2"
+            onClick={() => setReadoutLevel("rec")}
+            sx={{
+              fontWeight: readoutLevel === "rec" ? "bold" : "normal",
+              color: readoutLevel === "rec" ? 'primary.main' : 'inherit',
+            }}
+          >
+            record (record level)
+          </MuiLink>
+          &nbsp;or&nbsp;
+          <MuiLink
+            component="button"
+            variant="body2"
+            onClick={() => setReadoutLevel("gene")}
+            sx={{
+              fontWeight: readoutLevel === "gene" ? "bold" : "normal",
+              color: readoutLevel === "gene" ? 'primary.main' : 'inherit',
+            }}
+          >
+            gene (gene level)
+          </MuiLink>
         </Typography>
         <Button variant="outlined" component="label">
           Choose files

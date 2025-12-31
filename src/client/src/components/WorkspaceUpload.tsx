@@ -86,6 +86,8 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
 
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
 
+  const [readoutLevel, setReadoutLevel] = React.useState<"rec" | "gene">("gene");
+
   // Helper to build deps for import service
   const deps = React.useMemo(
     () => ({
@@ -206,7 +208,7 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
       return;
     }
 
-    await importGeneClustersBatch(deps, payloads);
+    await importGeneClustersBatch(deps, payloads, readoutLevel);
   }
 
   // Selection states
@@ -272,6 +274,8 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
         open={openGeneClusters}
         onClose={() => setOpenGeneClusters(false)}
         onImport={handleImportGeneClusters}
+        readoutLevel={readoutLevel}
+        setReadoutLevel={setReadoutLevel}
       />
 
       <DialogViewItem
