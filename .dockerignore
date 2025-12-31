@@ -1,0 +1,2 @@
+# React env files (dev-only, must never go into prod image)
+src/client/.env*

@@ -503,9 +503,22 @@ export const ViewMsa: React.FC<ViewMsaProps> = ({
     });
   }, [emptyMsaState, padSequence, setSession]);
 
+  const itemsSignature = React.useMemo(() => {
+    // Only include fields that matter for which sequences exist / their raw sequences.
+    // Avoids firing when backend just updates job status, timestamps, etc.
+    return session.items
+      .map(item => {
+        const seqSig = item.primarySequences
+          .map(ps => `${ps.id}:${ps.sequence.length}`)
+          .join("|");
+        return `${item.id}:${seqSig}`;
+      })
+      .join(";");
+  }, [session.items]);
+
   React.useEffect(() => {
     normalizeMsaState();
-  }, [normalizeMsaState, session.items]);
+  }, [normalizeMsaState, itemsSignature]); // itemsSignature instead of session.items
 
   const msaState = session.msaState ?? emptyMsaState();
   const msa = msaState.sequences;

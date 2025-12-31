@@ -85,9 +85,10 @@ export const Workspace: React.FC = () => {
     };
 
     // Create SSE connection 
-    const API_BASE = "http://localhost:4000";
+    const SSE_BASE = process.env.REACT_APP_SSE_BASE ?? "";
+    console.log(`SSE connecting to ${SSE_BASE}/api/sessionEvents?sessionId=${session.sessionId}`);
     const es = new EventSource(
-      `${API_BASE}/api/sessionEvents?sessionId=${encodeURIComponent(session.sessionId)}`
+      `${SSE_BASE}/api/sessionEvents?sessionId=${encodeURIComponent(session.sessionId)}`
     );
 
     es.addEventListener("hello", () => {
@@ -111,7 +112,12 @@ export const Workspace: React.FC = () => {
 
     es.onopen = () => {
       console.log("SSE connection opened for session events");
-    }
+    };
+
+    es.onmessage = (e) => {
+      // Generic message handler; shouldn't be called if specific events are handled
+      console.debug("SSE message received:", e.data);
+    };
 
     es.onerror = (err) => {
       // Fires on transient disconnects too; EventSource will retry automatically

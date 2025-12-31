@@ -34,15 +34,14 @@ from routes.events import blp_events
 # Initialize the Flask app
 app = Flask(__name__)
 
-CORS(
-    app,
-    resources={
-        r"/api/*": {
-            "origins": ["http://localhost:3000"],
-        }
-    },
-    supports_credentials=True,
-)
+# Enable CORS in development environment
+if os.getenv("FLASK_ENV") == "development":
+    origins = ["http://localhost:3000"]
+    CORS(
+        app,
+        resources={r"/api/*": {"origins": origins}},
+        supports_credentials=False,  # set True only if you actually use cookies
+    )
 
 # Logging setup
 # In development: simple basicConfig
