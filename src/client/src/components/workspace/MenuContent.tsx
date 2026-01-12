@@ -8,7 +8,6 @@ import Stack from "@mui/material/Stack";
 import ExploreIcon from "@mui/icons-material/Explore";
 import HomeRoundedIcon from "@mui/icons-material/HomeRounded";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
-import QueryStatsIcon from "@mui/icons-material/QueryStats";
 import { useNavigate, useLocation } from "react-router-dom";
 
 const mainListItems = [
@@ -23,14 +22,9 @@ const mainListItems = [
     to: `/dashboard/upload`
   },
   { 
-    text: "Explore", 
+    text: "Discovery", 
     icon: <ExploreIcon />,
-    to: `/dashboard/explore`
-  },
-  { 
-    text: "Query", 
-    icon: <QueryStatsIcon />,
-    to: `/dashboard/query`
+    to: `/dashboard/discovery`
   },
 ]
 

@@ -1,4 +1,5 @@
 import React from "react";
+import Chip from "@mui/material/Chip";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import FormControlLabel from "@mui/material/FormControlLabel";
@@ -7,20 +8,21 @@ import Switch from "@mui/material/Switch";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import Autocomplete from "@mui/material/Autocomplete";
-import { useNotifications } from "../components/NotificationProvider";
-import { DialogWindow } from "./DialogWindow";
-import { runQuery } from "../features/query/api";
+import { useNotifications } from "../../NotificationProvider";
+import { DialogWindow } from "../../../shared/DialogWindow";
 
 type CompoundOption = {
   name: string;
   smiles: string;
+  databaseName: string;
+  databaseIdentifier: string;
 }
 
 type DialogImportCompoundProps = {
   open: boolean;
   onClose: () => void;
-  onImportSingle: (compound: { name: string; smiles: string }) => void;
-  onImportBatch: (file: File) => void;
+  onImportSingle: (compound: { name: string; smiles: string; matchStereochemistry: boolean }) => void;
+  onImportBatch: (file: File, matchStereochemistry: boolean) => void;
 }
 
 export const DialogImportCompound: React.FC<DialogImportCompoundProps> = ({
@@ -35,6 +37,9 @@ export const DialogImportCompound: React.FC<DialogImportCompoundProps> = ({
   const [compoundName, setCompoundName] = React.useState<string>("");
   const [compoundSmiles, setCompoundSmiles] = React.useState<string>("");
   const [batchFile, setBatchFile] = React.useState<File | null>(null);
+
+  // Stereochemistry toggle
+  const [matchStereochemistry, setMatchStereochemistry] = React.useState<boolean>(true);
 
   // Autocomplete state
   const [options, setOptions] = React.useState<CompoundOption[]>([]);
@@ -52,20 +57,36 @@ export const DialogImportCompound: React.FC<DialogImportCompoundProps> = ({
     setCompoundSmiles("");
     setBatchFile(null);
     setOptions([]);
-  }
+  };
 
   const handleImport = () => {
     if (mode === "single") {
       onImportSingle({
         name: compoundName.trim(),
         smiles: compoundSmiles.trim(),
+        matchStereochemistry,
       });
     } else if (batchFile) {
-      onImportBatch(batchFile);
+      onImportBatch(batchFile, matchStereochemistry);
     }
     reset();
     onClose();
-  }
+  };
+
+  async function searchCompoundByName(q: string) {
+    const params = new URLSearchParams({
+      q,
+      limit: "10",
+    });
+
+    const res = await fetch(`/api/searchCompound?${params.toString()}`);
+
+    if (!res.ok) {
+      throw new Error(`Search failed: ${res.status}`);
+    };
+
+    return await res.json();
+  };
 
   // Debounced search when user types a compound name
   React.useEffect(() => {
@@ -74,16 +95,12 @@ export const DialogImportCompound: React.FC<DialogImportCompoundProps> = ({
     if (!q) {
       setOptions([]);
       return;
-    }
+    };
 
     const handle = setTimeout(async () => {
       setLoading(true);
       try {
-        const res = await runQuery({
-          name: "search_compound_by_name",
-          params: { q },
-          paging: { limit: 10 }, // size of suggestion list
-        });
+        const res = await searchCompoundByName(q);
 
         const rows = (res.rows || []) as CompoundOption[];
         setOptions(rows);
@@ -115,16 +132,28 @@ export const DialogImportCompound: React.FC<DialogImportCompoundProps> = ({
       <Typography>
         Enter a single compound identifier & SMILES, or upload a CSV/TSV that contains a column called "name" and a column called "smiles".
       </Typography>
-      
-      <FormControlLabel
-        control={
-          <Switch
-            checked={mode === "batch"}
-            onChange={(e) => setMode(e.target.checked ? "batch" : "single")}
-          />
-        }
-        label={mode === "batch" ? "Batch import from file" : "Single compound import"}
-      />
+
+      <Stack direction="column" spacing={0.5}>
+        <FormControlLabel
+          control={
+            <Switch 
+              checked={matchStereochemistry}
+              onChange={(e) => setMatchStereochemistry(e.target.checked)}
+            />
+          }
+          label={matchStereochemistry ? "Match stereochemistry" : "Ignore stereochemistry"}
+        />
+        
+        <FormControlLabel
+          control={
+            <Switch
+              checked={mode === "batch"}
+              onChange={(e) => setMode(e.target.checked ? "batch" : "single")}
+            />
+          }
+          label={mode === "batch" ? "Batch import from file" : "Single compound import"}
+        />
+      </Stack>
 
       {/* Single compound input */}
       {mode === "single" && (
@@ -154,6 +183,26 @@ export const DialogImportCompound: React.FC<DialogImportCompoundProps> = ({
                 setCompoundName(value.name);
                 setCompoundSmiles(value.smiles); // auto-fill from DB
               }
+            }}
+            renderOption={(props, option) => {
+              if (typeof option == "string") {
+                return <li {...props}>{option}</li>;
+              }
+
+              return (
+                <li {...props}>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Chip
+                      label={option.databaseName}
+                      size="small"
+                      variant="outlined"
+                    />
+                    <Typography variant="body2">
+                      {option.name}
+                    </Typography>
+                  </Stack>
+                </li>
+              )
             }}
             renderInput={(params) => (
               <TextField
@@ -203,5 +252,5 @@ export const DialogImportCompound: React.FC<DialogImportCompoundProps> = ({
 
       </Stack>  
     </DialogWindow>
-  )
-}
+  );
+};

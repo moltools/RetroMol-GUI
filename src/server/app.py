@@ -12,23 +12,12 @@ from routes.session import (
     blp_delete_session,
     blp_get_session,
     blp_save_session,
+    blp_delete_item,
 )
 from routes.session_store import get_or_init_app_start_epoch
-from routes.query import dsn_from_env, blp as query_blp
-from routes.jobs import (
-    blp_submit_compound,
-    blp_submit_gene_cluster,
-)
-from routes.views import (
-    blp_get_embedding_space,
-    blp_enrich,
-    blp_run_msa,
-)
-from routes.drawing import (
-    blp_draw_compound_item,
-    blp_draw_gene_cluster_item,
-)
 from routes.events import blp_events
+from routes.database import dsn_from_env
+from routes.compound import blp_search_compound, blp_submit_compound
 
 
 # Initialize the Flask app
@@ -159,12 +148,7 @@ app.register_blueprint(blp_create_session)
 app.register_blueprint(blp_delete_session)
 app.register_blueprint(blp_get_session)
 app.register_blueprint(blp_save_session)
-app.register_blueprint(query_blp)
+app.register_blueprint(blp_delete_item)
+app.register_blueprint(blp_search_compound)
 app.register_blueprint(blp_submit_compound)
-app.register_blueprint(blp_submit_gene_cluster)
-app.register_blueprint(blp_get_embedding_space)
-app.register_blueprint(blp_enrich)
-app.register_blueprint(blp_run_msa)
-app.register_blueprint(blp_draw_compound_item)
-app.register_blueprint(blp_draw_gene_cluster_item)
 app.register_blueprint(blp_events)

@@ -7,7 +7,7 @@ import Typography from "@mui/material/Typography";
 import { useTheme } from "@mui/material/styles";
 import { Link as RouterLink } from "react-router-dom";
 
-export const WorkspaceDashboard: React.FC = () => {
+export const WorkspaceHome: React.FC = () => {
   const theme = useTheme();
 
   return (
@@ -49,12 +49,12 @@ export const WorkspaceDashboard: React.FC = () => {
             You can use the biosynthetic fingerprints parsed from you data for exploratory data analysis in the&nbsp;
             <MuiLink
               component={RouterLink}
-              to="/dashboard/explore"
+              to="/dashboard/discovery"
               underline="hover"
               color={(theme.vars || theme).palette.primary.main}
               sx={{ fontWeight: "500" }}
             >
-              Explore tab
+              Discovery tab
             </MuiLink>
             .
             Exploratory data analysis allows you to retrieve similar biosynthetic fingerprints and their associated metadata from the database using your uploaded data.

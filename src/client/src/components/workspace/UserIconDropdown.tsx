@@ -12,8 +12,8 @@ import MenuItem from "@mui/material/MenuItem";
 import Tooltip from "@mui/material/Tooltip";
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 import { useNotifications } from "./NotificationProvider";
-import { deleteSession } from "../features/session/api";
-import { deleteCookie, getCookie } from "../features/session/utils";
+import { deleteSession } from "../../features/session/api";
+import { deleteCookie, getCookie } from "../../features/session/utils";
 
 export const UserIconDropdown: React.FC<IconButtonOwnProps> = (props) => {
   const { pushNotification } = useNotifications();

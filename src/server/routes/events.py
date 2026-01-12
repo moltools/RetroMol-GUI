@@ -5,7 +5,7 @@ from typing import Iterator
 import redis
 from flask import Blueprint, Response, request, stream_with_context
 
-from routes.session_store import REDIS_URL, publish_session_event, load_session_meta
+from routes.session_store import REDIS_URL, load_session_meta
 
 
 blp_events = Blueprint("events", __name__)

@@ -21,6 +21,19 @@ ITEM_PREFIX = "session_item:"  # key pattern: session_item:{sessionId}:{itemId}
 EVENTS_CHANNEL_PREFIX = "session_events:"
 
 
+# Fields that are owned by the server and should not be overwritten by client data
+# Item 'name' and 'updatedAt' are client-editable
+SERVER_OWNED_FIELDS = {
+    "name",
+    "score",
+    "payload",
+    "status",
+    "errorMessage",
+    "smiles",
+    "fileContent",
+}
+
+
 def _event_channel(session_id: str) -> str:
     """
     Get the Redis Pub/Sub channel name for session events.
@@ -343,21 +356,47 @@ def update_item(session_id: str, item_id: str, mutator: Callable[[dict[str, Any]
     })
 
     return True
-    
 
-# Fields that are owned by the server and should not be overwritten by client data
-SERVER_OWNED_FIELDS = {
-    "status",
-    "errorMessage",
-    "retrofingerprints",
-    "retrofingerprint512",
-    "morganfingerprint2048r2",
-    "primarySequences",
-    "smiles",
-    "taggedSmiles",
-    "coverage",
-    "updatedAt",
-}
+
+def delete_item(session_id: str, item_id: str) -> None:
+    """
+    Delete  a single item from a session (both item blob and its id in session meta).
+
+    :return: True if deleted, False if session/item not found
+    .. note:: publishes a session_merged event so clients refresh via SSE
+    """
+    meta = load_session_meta(session_id)
+    if meta is None:
+        return False
+    
+    item_ids = meta.get("items", []) or []
+    if not isinstance(item_ids, list):
+        item_ids = []
+
+    if item_id not in item_ids:
+        return False
+
+    # Remove id from meta list
+    item_ids = [x for x in item_ids if x != item_id]
+    meta["items"] = item_ids
+
+    # Delete item blob
+    redis_client.delete(_item_key(session_id, item_id))
+
+    # Save updated session meta
+    redis_client.set(
+        _session_key(session_id),
+        json.dumps(meta),
+        ex=SESSION_TTL_SECONDS,
+    )
+
+    # Tell SSE clients to refresh
+    publish_session_event(session_id, {
+        "type": "session_merged",
+        "deletedItemId": item_id,
+    })
+
+    return True
 
 
 def merge_session_from_client(new_session: dict[str, Any]) -> None:

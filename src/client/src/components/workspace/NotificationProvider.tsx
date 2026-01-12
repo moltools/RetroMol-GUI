@@ -1,5 +1,5 @@
 import React from "react";
-import type { NotificationSeverity } from "../features/notifications/types";
+import type { NotificationSeverity } from "../../features/notifications/types";
 
 // Extend the Notification interface with a "level" property
 export interface Notification {

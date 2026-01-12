@@ -1,0 +1,238 @@
+import React from "react";
+import Box from "@mui/material/Box";
+import Stack from "@mui/material/Stack";
+import Typography from "@mui/material/Typography";
+import Checkbox from "@mui/material/Checkbox";
+import Chip from "@mui/material/Chip";
+import IconButton from "@mui/material/IconButton";
+import Tooltip from "@mui/material/Tooltip";
+import DeleteIcon from "@mui/icons-material/Delete";
+import CircularProgress from "@mui/material/CircularProgress";
+import { Gauge } from "@mui/x-charts/Gauge";
+import { SessionItem } from "../../../../features/session/types";
+import { alpha } from "@mui/material/styles";
+import type { Theme } from "@mui/material/styles";
+
+function getScoreColor(theme: Theme, value: number): string {
+  const t = theme.vars || theme;
+  if (value < 0.5) { return t.palette.error.main };
+  if (value < 0.9) { return t.palette.warning.main };
+  return t.palette.success.main;
+};
+
+type WorkspaceItemCardProps = {
+  item: SessionItem;
+  selected: boolean;
+  disabled?: boolean;
+  onToggleSelect: (id: string) => void;
+  onDelete: (id: string) => void;
+};
+
+// Helper to format "X ago"
+function formatUpdatedAgo(updatedAt?: number): string {
+  if (!updatedAt) return "Never updated";
+  const now = Date.now();
+  const diffMs = now - updatedAt;
+  if (diffMs < 0) return "just now";
+
+  const diffSec = Math.floor(diffMs / 1000);
+  if (diffSec < 5) return "just now";
+  if (diffSec < 60) return `${diffSec}s ago`;
+
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays}d ago`;
+};
+
+export const WorkspaceItemCard: React.FC<WorkspaceItemCardProps> = ({
+  item,
+  selected,
+  disabled = false,
+  onToggleSelect,
+  onDelete,
+}) => {
+  const isCompound = item.kind === "compound"; // there are only two types: "compound" and "cluster"
+  const itemScore = typeof item.score === "number" ? item.score : 0.0;
+
+  // Tick every 15s so "X ago" updates
+  const [, forceTick] = React.useState(0);
+  React.useEffect(() => {
+    const id = window.setInterval(() => forceTick(n => n + 1), 5000);
+    return () => { window.clearInterval(id); }
+  }, [])
+
+  const isQueued = item.status === "queued";
+  const showSpinner = item.status === "processing";
+  const isError = item.status === "error";
+  const isDone = item.status === "done";
+
+  const handleToggle = (e?: React.SyntheticEvent) => {
+    if (e) e.stopPropagation();
+    if (disabled) return;
+    onToggleSelect(item.id);
+  };
+
+  const handleDelete = (e?: React.SyntheticEvent) => {
+    if (e) e.stopPropagation();
+    if (disabled) return;
+    onDelete(item.id);
+  };
+
+  return (
+    <Stack
+      onClick={handleToggle}
+      direction="column"
+      sx={(theme) => {
+        const t = theme.vars || theme;
+        return {
+          borderRadius: 1,
+          border: `1px solid ${selected ? t.palette.primary.main : "transparent"}`,
+          p: 1.5,
+          display: "flex",
+          gap: 1.5,
+          cursor: "pointer",
+          "&:hover": { boxShadow: 10 },
+          backgroundColor: selected ? alpha("#000000", 0.04) : alpha("#000000", 0.02),
+          ...theme.applyStyles("dark", { backgroundColor: selected ? alpha("#ffffff", 0.06) : alpha("#ffffff", 0.03) }),
+        }
+      }}
+    >
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 1.5,
+        }}
+      >
+        <Stack direction="row" spacing={1.5} alignItems="center">
+          <Checkbox
+            size="small"
+            checked={selected}
+            disabled={disabled}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSelect(item.id);
+            }}
+          />
+
+          <Gauge
+            value={Math.round(itemScore * 100)}
+            valueMin={0}
+            valueMax={100}
+            startAngle={-110}
+            endAngle={110}
+            width={70}
+            height={70}
+            innerRadius="70%"
+            outerRadius="100%"
+              sx={{
+                "& text": {
+                  fontSize: "0.65rem",
+                  fontWeight: 600,
+                },
+                "& .MuiGauge-valueArc": {
+                  fill: (theme) => getScoreColor(theme, item.score!),
+                  transition: "stroke-dashoffset 0.3s ease",
+                },
+              }}
+            text={({ value }) => `${value}%`}
+          />
+
+          <Stack direction="column" spacing={0.5}>
+            <Stack direction="row" spacing={0.5} alignItems="center" width="400px">
+              <Stack direction="row" alignItems="center" spacing={1}>
+                  <Typography
+                    variant="body2"
+                    fontWeight={500}
+                    noWrap
+                    sx={{ maxWidth: 220 }}
+                  >
+                    {item.name}
+                  </Typography>
+              </Stack>
+            </Stack>
+
+            <Typography variant="caption" color="text.secondary">
+              Status updated {formatUpdatedAgo(item.updatedAt)}
+            </Typography>
+          </Stack>
+        </Stack>
+        
+        <Stack direction="row" spacing={1} alignItems="center">
+
+          {disabled && (
+            <>
+              <Chip
+                label="Deleting..."
+                size="small"
+                sx={{ fontSize: "0.7rem", height: 20 }}
+              />
+              <CircularProgress size={16} thickness={4} />
+            </>
+          )}
+
+          {isCompound && (
+            <Chip 
+              label={item.matchStereochemistry ? "Stereo" : "Non-stereo"}
+              size="small"
+              sx={{ fontSize: "0.7rem", height: 20 }}
+            />
+          )}
+
+          {isQueued && (
+            <Chip
+              label="Queued"
+              color="warning"
+              size="small"
+              sx={{ fontSize: "0.7rem", height: 20 }}
+            />
+          )}
+          
+          {showSpinner && (<CircularProgress size={16} thickness={4} />)}
+
+          {isDone && (
+            <Chip
+              label="Ready"
+              color="success"
+              size="small"
+              sx={{ fontSize: "0.7rem", height: 20 }}
+            />
+          )}
+
+          {isError && (
+            <Tooltip
+              title={item.errorMessage || "An unknown error occurred."}
+              placement="left"
+              arrow
+            >
+              <Chip
+                label="Error"
+                color="error"
+                size="small"
+                sx={{ fontSize: "0.7rem", height: 20 }}
+              />
+            </Tooltip>
+          )}
+
+          <IconButton
+            size="small"
+            disabled={disabled}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (disabled) return;
+              onDelete(item.id);
+            }}
+          >
+            <DeleteIcon fontSize="small" />
+          </IconButton>
+        </Stack>
+      </Box>
+    </Stack>
+  );
+};

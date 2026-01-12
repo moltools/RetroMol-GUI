@@ -1,6 +1,6 @@
 import React from "react";
 import Box from "@mui/material/Box";
-import packageJson from "../../package.json";
+import packageJson from "../../../package.json";
 
 export const BuildVersion: React.FC = () => {
   return (

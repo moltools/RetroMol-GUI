@@ -15,10 +15,10 @@ import Toolbar from "@mui/material/Toolbar";
 import MenuIcon from "@mui/icons-material/Menu";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import visuallyHidden from "@mui/utils/visuallyHidden";
-import ColorModeIconDropdown from "../theme/ColorModeIconDropdown";
+import ColorModeIconDropdown from "../../theme/ColorModeIconDropdown";
 import { useNavigate } from "react-router-dom";
-import { createSession, getSession } from "../features/session/api";
-import { createCookie } from "../features/session/utils";
+import { createSession, getSession } from "../../features/session/api";
+import { createCookie } from "../../features/session/utils";
 
 // Custom styling for the toolbar
 const StyledToolbar = styled(Toolbar)(({ theme }) => ({

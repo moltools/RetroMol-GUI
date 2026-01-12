@@ -4,7 +4,7 @@ import NotificationsRoundedIcon from "@mui/icons-material/NotificationsRounded";
 import { MenuButton } from "./MenuButton";
 import { useNotifications } from "./NotificationProvider";
 import { UserIconDropdown } from "./UserIconDropdown";
-import ColorModeIconDropdown from "../theme/ColorModeIconDropdown";
+import ColorModeIconDropdown from "../../theme/ColorModeIconDropdown";
 
 interface WorksspaceControlsProps {
   handleDrawerOpen: () => void;
