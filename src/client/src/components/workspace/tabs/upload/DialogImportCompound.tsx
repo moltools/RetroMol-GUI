@@ -74,17 +74,9 @@ export const DialogImportCompound: React.FC<DialogImportCompoundProps> = ({
   };
 
   async function searchCompoundByName(q: string) {
-    const params = new URLSearchParams({
-      q,
-      limit: "10",
-    });
-
+    const params = new URLSearchParams({q, limit: "10"});
     const res = await fetch(`/api/searchCompound?${params.toString()}`);
-
-    if (!res.ok) {
-      throw new Error(`Search failed: ${res.status}`);
-    };
-
+    if (!res.ok) { throw new Error(`Search failed: ${res.status}`); };
     return await res.json();
   };
 
@@ -101,7 +93,6 @@ export const DialogImportCompound: React.FC<DialogImportCompoundProps> = ({
       setLoading(true);
       try {
         const res = await searchCompoundByName(q);
-
         const rows = (res.rows || []) as CompoundOption[];
         setOptions(rows);
       } catch (err) {
@@ -131,6 +122,7 @@ export const DialogImportCompound: React.FC<DialogImportCompoundProps> = ({
     <Stack spacing={2}>
       <Typography>
         Enter a single compound identifier & SMILES, or upload a CSV/TSV that contains a column called "name" and a column called "smiles".
+        Begin typing a compound name to see autocomplete suggestions from our database. Selecting one will automatically fill in a valid SMILES.
       </Typography>
 
       <Stack direction="column" spacing={0.5}>

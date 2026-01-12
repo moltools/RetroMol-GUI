@@ -18,6 +18,7 @@ from routes.session_store import get_or_init_app_start_epoch
 from routes.events import blp_events
 from routes.database import dsn_from_env
 from routes.compound import blp_search_compound, blp_submit_compound
+from routes.query import blp_query_item
 
 
 # Initialize the Flask app
@@ -151,4 +152,5 @@ app.register_blueprint(blp_save_session)
 app.register_blueprint(blp_delete_item)
 app.register_blueprint(blp_search_compound)
 app.register_blueprint(blp_submit_compound)
+app.register_blueprint(blp_query_item)
 app.register_blueprint(blp_events)

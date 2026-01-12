@@ -90,14 +90,7 @@ def _set_item_status_inplace(item: dict, status: str, error_message: str | None 
 @blp_submit_compound.post("/api/submitCompound")
 def submit_compound():
     """
-    payload = request.get_json(force=True) or {}
-
-    session_id = payload.get("sessionId")
-    item_id = payload.get("itemId")
-    name = payload.get("name")
-    smiles = payload.get("smiles")
-
-    Endpoint to submit a compound by SMILES string.
+    Submit a compound for processing.
     """
     payload = request.get_json(force=True) or {}
     session_id = payload.get("sessionId")
