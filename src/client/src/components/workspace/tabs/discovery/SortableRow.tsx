@@ -11,11 +11,12 @@ import { MsaItem, Reference } from "./QueryResultView";
 interface SortableRowProps {
   row: MsaItem;
   labelWidth: number;
+  columnTemplate: string;
   children: React.ReactNode;
 };
 
-const fmt = (v: number | null, digits: number) => 
-    v == null || Number.isNaN(v) ? "" : v.toFixed(digits);
+const fmt = (v: number | null, digits: number) =>
+  v == null || Number.isNaN(v) ? "" : v.toFixed(digits);
 
 const referenceToUrl = (ref: Reference): string | null => {
   switch (ref.database_name.toLowerCase()) {
@@ -23,20 +24,28 @@ const referenceToUrl = (ref: Reference): string | null => {
       return `https://www.npatlas.org/explore/compounds/${ref.database_identifier}`;
     default:
       return null;
-  };
+  }
 };
 
 export const SortableRow: React.FC<SortableRowProps> = ({
   row,
   labelWidth,
+  columnTemplate,
   children,
 }) => {
-  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: row.id });
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+  } = useSortable({ id: row.id });
 
   // Setup outlink to reference for row
   const [ref, setRef] = React.useState<Reference | null>(null);
   const url = React.useMemo(() => (ref ? referenceToUrl(ref) : null), [ref]);
-  
+
   // Set reference on mount
   React.useEffect(() => {
     if (row.references && row.references.length > 0) {
@@ -51,12 +60,19 @@ export const SortableRow: React.FC<SortableRowProps> = ({
   const scoreBlockWidth = 40;
 
   return (
-    <>
+    <Box
+      ref={setNodeRef}
+      sx={{
+        display: "grid",
+        gridTemplateColumns: columnTemplate,
+        columnGap: 1,
+        alignItems: "center",
+        transform: transform ? CSS.Transform.toString(transform) : undefined,
+        transition,
+      }}
+    >
       <Box
-        ref={setNodeRef}
         sx={{
-          transform: transform ? CSS.Transform.toString(transform) : undefined,
-          transition,
           m: 0,
           p: 0,
           height: 20,
@@ -73,6 +89,7 @@ export const SortableRow: React.FC<SortableRowProps> = ({
         }}
       >
         <Box
+          ref={setActivatorNodeRef}
           {...listeners}
           {...attributes}
           sx={{
@@ -80,11 +97,16 @@ export const SortableRow: React.FC<SortableRowProps> = ({
             alignItems: "center",
             cursor: "grab",
           }}
-          onClick={e => e.stopPropagation()} // don't trigger center selection on drag
+          onClick={(e) => e.stopPropagation()} // don't trigger center selection on drag
         >
           <DragIndicatorIcon fontSize="small" />
         </Box>
-        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ width: "100%", pl: 1 }}>
+        <Stack
+          direction="row"
+          alignItems="center"
+          justifyContent="space-between"
+          sx={{ width: "100%", pl: 1 }}
+        >
           <Tooltip title={row.name || row.id} arrow>
             <Typography
               variant="body2"
@@ -92,7 +114,7 @@ export const SortableRow: React.FC<SortableRowProps> = ({
               href={url ?? undefined}
               target={url ? "_blank" : undefined}
               rel={url ? "noopener noreferrer" : undefined}
-              onClick={(e) => {
+              onClick={(e: React.MouseEvent<HTMLAnchorElement, MouseEvent>) => {
                 if (url) e.stopPropagation(); // prevent row drag / selection
               }}
               sx={{
@@ -110,9 +132,7 @@ export const SortableRow: React.FC<SortableRowProps> = ({
                 cursor: url ? "pointer" : "default",
                 color: "inherit",
 
-                "&:hover": url
-                  ? { color: "primary.main" }
-                  : undefined,
+                "&:hover": url ? { color: "primary.main" } : undefined,
               }}
             >
               {row.name || row.id}
@@ -130,11 +150,7 @@ export const SortableRow: React.FC<SortableRowProps> = ({
               lineHeight: 1,
             }}
           >
-            <Tooltip
-              title={`Alignment score: ${alignText}`}
-              placement="right"
-              arrow
-            >
+            <Tooltip title={`Alignment score: ${alignText}`} placement="right" arrow>
               <Typography
                 variant="caption"
                 sx={{
@@ -146,11 +162,7 @@ export const SortableRow: React.FC<SortableRowProps> = ({
                 {alignText}
               </Typography>
             </Tooltip>
-            <Tooltip
-              title={`Cosine score: ${cosineText}`}
-              placement="right"
-              arrow
-            >
+            <Tooltip title={`Cosine score: ${cosineText}`} placement="right" arrow>
               <Typography
                 variant="caption"
                 sx={{
@@ -165,21 +177,21 @@ export const SortableRow: React.FC<SortableRowProps> = ({
           </Stack>
         </Stack>
       </Box>
-      
+
       {/* Motifs */}
       {children}
 
       {/* Row line */}
-      <Box
+      {/* <Box
         sx={{
           gridColumn: "1 / -1", // span every column
           borderBottom: "1px solid",
           borderColor: "divider",
           height: 0,
-          mt: "-19px",
+          mt: "-30px",
           zIndex: 50,
         }}
-      />
-    </>
+      /> */}
+    </Box>
   );
 };

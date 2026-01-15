@@ -4,7 +4,6 @@ export const BaseItemSchema = z.object({
   id: z.string(),
   name: z.string(), // display name
   score: z.number().min(0).max(1).nullable().optional(),
-  payload: z.record(z.any()).nullable().optional(),
   status: z.enum(["queued", "processing", "done", "error"]).default("queued"),
   errorMessage: z.string().nullable().optional(),
   updatedAt: z.number().nonnegative().default(() => Date.now()),

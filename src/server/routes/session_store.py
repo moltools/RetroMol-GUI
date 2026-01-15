@@ -297,6 +297,21 @@ def load_item(session_id: str, item_id: str) -> dict[str, Any] | None:
     return json.loads(data)
 
 
+def strip_property_from_dict(d: dict[str, Any], prop: str) -> dict[str, Any]:
+    """
+    Recursively strip a property from a nested dictionary.
+
+    :param d: the dictionary to process
+    :param prop: the property name to strip
+    :return: a new dictionary with the property stripped
+    """
+    out = dict(d)
+    if prop in out:
+        out.pop(prop, None)
+
+    return out
+
+
 def save_item(session_id: str, item: dict[str, Any]) -> None:
     """
     Save a specific item to a session.
@@ -437,7 +452,8 @@ def merge_session_from_client(new_session: dict[str, Any]) -> None:
         
         if old_item is None:
             # New item: accept as-is (client owns everything initially)
-            merged_items.append(new_item)
+            item = strip_property_from_dict(new_item, "payload")  # remove payload if present
+            merged_items.append(item)
             new_item_ids.append(item_id)
         else:
             # Existing item: merge client fields into old item, presevering server-owned fields

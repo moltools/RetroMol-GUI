@@ -105,12 +105,18 @@ export const WorkspaceItemCard: React.FC<WorkspaceItemCardProps> = ({
       <Box
         sx={{
           display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
+          alignItems: { xs: "flex-start", sm: "center" },
+          justifyContent: { xs: "flex-start", sm: "space-between" },
+          flexWrap: "wrap",
           gap: 1.5,
         }}
       >
-        <Stack direction="row" spacing={1.5} alignItems="center">
+        <Stack
+          direction="row"
+          spacing={1.5}
+          alignItems="center"
+          sx={{ flex: "1 1 260px", minWidth: 0 }}
+        >
           <Checkbox
             size="small"
             checked={selected}
@@ -131,27 +137,28 @@ export const WorkspaceItemCard: React.FC<WorkspaceItemCardProps> = ({
             height={70}
             innerRadius="70%"
             outerRadius="100%"
-              sx={{
-                "& text": {
-                  fontSize: "0.65rem",
-                  fontWeight: 600,
-                },
-                "& .MuiGauge-valueArc": {
-                  fill: (theme) => getScoreColor(theme, item.score!),
-                  transition: "stroke-dashoffset 0.3s ease",
-                },
-              }}
+            sx={{
+              minWidth: 70,
+              "& text": {
+                fontSize: "0.65rem",
+                fontWeight: 600,
+              },
+              "& .MuiGauge-valueArc": {
+                fill: (theme) => getScoreColor(theme, item.score!),
+                transition: "stroke-dashoffset 0.3s ease",
+              },
+            }}
             text={({ value }) => `${value}%`}
           />
 
-          <Stack direction="column" spacing={0.5}>
-            <Stack direction="row" spacing={0.5} alignItems="center" width="400px">
-              <Stack direction="row" alignItems="center" spacing={1}>
+          <Stack direction="column" spacing={0.5} sx={{ minWidth: 0, flex: 1 }}>
+            <Stack direction="row" spacing={0.5} alignItems="center" sx={{ minWidth: 0 }}>
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 0 }}>
                   <Typography
                     variant="body2"
                     fontWeight={500}
                     noWrap
-                    sx={{ maxWidth: 220 }}
+                    sx={{ maxWidth: 220, minWidth: 0 }}
                   >
                     {item.name}
                   </Typography>
@@ -164,7 +171,18 @@ export const WorkspaceItemCard: React.FC<WorkspaceItemCardProps> = ({
           </Stack>
         </Stack>
         
-        <Stack direction="row" spacing={1} alignItems="center">
+        <Stack
+          direction="row"
+          spacing={1}
+          alignItems="center"
+          useFlexGap
+          sx={{
+            flex: "0 1 auto",
+            flexWrap: "wrap",
+            justifyContent: { xs: "flex-start", sm: "flex-end" },
+            maxWidth: "100%",
+          }}
+        >
 
           {disabled && (
             <>

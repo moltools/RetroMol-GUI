@@ -72,7 +72,6 @@ export async function importCompoundsBatch(
       updatedAt: Date.now(),
       // optional fields
       score: null,
-      payload: null,
     }));
 
     const updated: Session = { ...prev, items: [...prev.items, ...createdItems] };

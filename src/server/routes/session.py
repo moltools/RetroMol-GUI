@@ -10,6 +10,7 @@ from routes.session_store import (
     merge_session_from_client,
     count_sessions,
     delete_item as redis_delete_item,
+    strip_property_from_dict,
 )
 
 
@@ -96,6 +97,9 @@ def get_session() -> tuple[dict[str, str], int]:
     if not isinstance(items, list):
         items = []
         full["items"] = items
+
+    # We don't want to send payloads back to the client
+    full["items"] = [strip_property_from_dict(item, "payload") for item in items]
 
     return jsonify({"sessionId": full["sessionId"], "session": full}), 200
 

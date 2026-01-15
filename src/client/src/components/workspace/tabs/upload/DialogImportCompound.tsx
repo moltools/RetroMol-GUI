@@ -10,6 +10,7 @@ import Typography from "@mui/material/Typography";
 import Autocomplete from "@mui/material/Autocomplete";
 import { useNotifications } from "../../NotificationProvider";
 import { DialogWindow } from "../../../shared/DialogWindow";
+import { o } from "framer-motion/dist/types.d-DagZKalS";
 
 type CompoundOption = {
   name: string;
@@ -177,12 +178,18 @@ export const DialogImportCompound: React.FC<DialogImportCompoundProps> = ({
               }
             }}
             renderOption={(props, option) => {
-              if (typeof option == "string") {
-                return <li {...props}>{option}</li>;
-              }
+              const { key, ...optionProps } = props as React.HTMLAttributes<HTMLLIElement> & { key: React.Key };
+
+              if (typeof option === "string") {
+                return (
+                  <li key={key} {...optionProps}>
+                    {option}
+                  </li>
+                );
+              };
 
               return (
-                <li {...props}>
+                <li key={key} {...optionProps}>
                   <Stack direction="row" spacing={1} alignItems="center">
                     <Chip
                       label={option.databaseName}

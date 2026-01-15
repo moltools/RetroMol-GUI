@@ -18,7 +18,7 @@ from routes.session_store import get_or_init_app_start_epoch
 from routes.events import blp_events
 from routes.database import dsn_from_env
 from routes.compound import blp_search_compound, blp_submit_compound
-from routes.query import blp_query_item
+from routes.query_service import blp_query_item
 
 
 # Initialize the Flask app

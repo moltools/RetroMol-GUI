@@ -15,6 +15,7 @@ export async function getSession(sessionIdArg?: string): Promise<Session> {
   const sessionId = sessionIdArg ?? getCookie("sessionId");
   if (!sessionId) throw new Error("No sessionId provided or found in cookies");
   const data = await postJson("/api/getSession", { sessionId }, GetSessionRespSchema);
+  // Dont have to sanitize session: postJson already validates with GetSessionRespSchema
   return data.session;
 };
 
@@ -24,8 +25,8 @@ export async function refreshSession(sessionId: string): Promise<Session> {
 
 export async function saveSession(session: Session): Promise<void> {
   // Runtime validate before sending (especially useful because session is user-mutated in UI)
-  SessionSchema.parse(session);
-  await postJson("/api/saveSession", { session }, z.unknown());
+  const sanitized = SessionSchema.parse(session);
+  await postJson("/api/saveSession", { session: sanitized }, z.unknown());
 };
 
 export async function deleteSession(): Promise<void> {

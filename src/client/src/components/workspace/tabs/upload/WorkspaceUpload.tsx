@@ -166,6 +166,17 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
     };
   };
 
+  // Open dailogs
+  const handleOpenCompounds = (event: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
+    event.currentTarget.blur(); // prevents 'Blocked aria-hidden on an element' warning
+    setOpenCompounds(true);
+  };
+
+  const handleOpenBGCs = (event: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
+    // event.currentTarget.blur(); // prevents 'Blocked aria-hidden on an element' warning
+    // Not implemented yet
+  };
+
   // Import compound handlers
   const handleImportSingleCompound = async({ name, smiles, matchStereochemistry}: { name: string; smiles: string; matchStereochemistry: boolean }) => {
     await importCompound(deps, { name, smiles, matchStereochemistry });
@@ -228,11 +239,11 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
           </Typography>
 
           <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
-            <Button variant="contained" onClick={() => setOpenCompounds(true)}>
+            <Button variant="contained" onClick={handleOpenCompounds}>
               Import compounds
             </Button>
 
-            <Button variant="contained" onClick={() => setOpenCompounds(true)} disabled>
+            <Button variant="contained" onClick={handleOpenBGCs} disabled>
               Import BGCs
             </Button>
           </Stack>

@@ -8,8 +8,8 @@ import ZoomOutIcon from "@mui/icons-material/ZoomOut";
 import ZoomInIcon from "@mui/icons-material/ZoomIn";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import DownloadIcon from "@mui/icons-material/Download";
+import ExchangeIcon from "@mui/icons-material/SwapHoriz";
 import { SortableRow } from "./SortableRow";
-import { SortableItem } from "./SortableItem";
 
 // Imports for dragging and dropping rows and motifs
 import { DndContext, DragEndEvent } from "@dnd-kit/core";
@@ -17,7 +17,6 @@ import {
   SortableContext,
   arrayMove,
   verticalListSortingStrategy,
-  horizontalListSortingStrategy,
 } from "@dnd-kit/sortable";
 
 export type SequenceItem = {
@@ -25,6 +24,12 @@ export type SequenceItem = {
   isGap: boolean;
   name: string | null;
   smiles: string | null;
+};
+
+export type Sequence = {
+  id: string;
+  name: string | null;
+  sequence: SequenceItem[];
 };
 
 export type Reference = {
@@ -38,7 +43,7 @@ export type MsaItem = {
   name?: string;
   alignment_score: number | null;
   cosine_score: number | null;
-  sequence: SequenceItem[];
+  sequence: Sequence[];
   references: Reference[];
 };
 
@@ -242,10 +247,20 @@ const renderTooltipLabel = (
   return renderChiralSuperscripts(raw || "Unknown motif");
 };
 
-
 export const QueryResultView: React.FC<QueryResultViewProps> = ({ result }) => {
   // Keep order locally
   const [msa, setMsa] = React.useState<MsaItem[]>(result.msa);
+
+  // Invert order of motifs in msa
+  const invertMsaMotifOrder = () => {
+    setMsa((prev) =>
+      prev.map((row) => ({
+        ...row,
+        sequence: [...row.sequence]
+          .reverse()
+          .map((seq) => ({ ...seq, sequence: [...seq.sequence].reverse() })),
+      })))
+  };
 
   // Zoom
   const [zoom, setZoom] = React.useState<number>(1.0);
@@ -253,7 +268,15 @@ export const QueryResultView: React.FC<QueryResultViewProps> = ({ result }) => {
   const handleZoomOut = () => setZoom(z => Math.max(z - 0.1, 0.5));
   const handleZoomReset = () => setZoom(1.0);
 
-  const msaLength = result.msa.length > 0 ? Math.max(...result.msa.map((r) => r.sequence.length)) : 0;
+  const sequenceLength = (seqs: Sequence[]) =>
+    seqs.reduce((sum, seq) => sum + seq.sequence.length, 0);
+
+  const msaLength =
+    result.msa.length > 0
+      ? Math.max(...result.msa.map((r) => sequenceLength(r.sequence)))
+      : 0;
+
+  // const msaLength = result.msa.length > 0 ? Math.max(...result.msa.map((r) => r.sequence.length)) : 0;
   const motifWidth = 50 * zoom;
   const labelWidth = 250;
   const colTemplate = `${labelWidth}px repeat(${msaLength}, ${motifWidth}px) 1fr`;
@@ -335,6 +358,7 @@ export const QueryResultView: React.FC<QueryResultViewProps> = ({ result }) => {
           <Tooltip title="Zoom MSA out" arrow><ZoomOutIcon onClick={handleZoomOut} sx={{ cursor: "pointer" }} /></Tooltip>
           <Tooltip title="Zoom MSA in" arrow><ZoomInIcon onClick={handleZoomIn} sx={{ cursor: "pointer" }} /></Tooltip>
           <Tooltip title="Reset zoom" arrow><RefreshIcon onClick={handleZoomReset} sx={{ cursor: "pointer" }} /></Tooltip>
+          <Tooltip title="Invert order of motifs" arrow><ExchangeIcon onClick={invertMsaMotifOrder} sx={{ cursor: "pointer" }} /></Tooltip>
           <Tooltip title="Download as SVG" arrow><DownloadIcon onClick={() => {}} sx={{ cursor: "not-allowed" }} /></Tooltip>
         </Box>
       </Box>
@@ -345,91 +369,170 @@ export const QueryResultView: React.FC<QueryResultViewProps> = ({ result }) => {
             width: "100%",
             overflowX: "auto",
             overflowY: "hidden",
-            pb: 2,
+            py: 2,
           }}
         >
           <DndContext onDragEnd={handleDragEnd}>
             <SortableContext
-              items={result.msa.map((item) => item.id)}
+              items={msa.map((item) => item.id)}
               strategy={verticalListSortingStrategy}
             >
               <Box
                 sx={{
-                  display: "grid",
-                  gridTemplateColumns: colTemplate,
+                  display: "flex",
+                  flexDirection: "column",
                   width: "100%",
-                  gap: 1,
+                  gap: 3.5,
                   py: 1,
                 }}
               >
                 {msa.map((row) => (
-                  <React.Fragment key={row.id}>
-                    <SortableRow row={row} labelWidth={labelWidth}>
-                      <SortableContext
-                        items={row.sequence.map((item) => item.id)}
-                        strategy={horizontalListSortingStrategy}
+                  <Box
+                    key={row.id}
+                    sx={{
+                      position: "relative",
+                      width: "fit-content", // important: match grid width so line aligns
+                    }}
+                  >
+                  <SortableRow
+                    key={row.id}
+                    row={row}
+                    labelWidth={labelWidth}
+                    columnTemplate={colTemplate}
+                  >
+                    {row.sequence.map((subseq) => {
+                      const allGaps = subseq.sequence.every((it) => it.isGap);
+
+                      return (<Box
+                        key={subseq.id}
+                        sx={{
+                          display: "flex",
+                          flexDirection: "row",
+                          gridColumn: `span ${subseq.sequence.length}`,
+                          position: "relative",
+                          zIndex: 110,
+                          // keep the space, hide the whole subseq visually
+                          visibility: allGaps ? "hidden" : "visible",
+                          pointerEvents: allGaps ? "none" : "auto",
+
+                          // keep the same vertical footprint as normal subseqs
+                          minHeight: 24, // tweak if needed to match your chip row height
+                          "&::before": {
+                            content: '""',
+                            position: "absolute",
+                            left: 0,
+                            right: 0,
+                            top: -20,
+                            height: "32px",
+                            // borderTopRightRadius: "4px",
+                            // borderTopLeftRadius: "4px",
+                            borderRadius: "4px",
+                            backgroundColor: "divider",
+                            pointerEvents: "none",
+                            // also hide the divider when all gaps
+                            opacity: allGaps ? 0 : 1,
+                          },
+                        }}
                       >
-                        {row.sequence.map(item => (
-                          <SortableItem id={item.id} key={item.id} disabled={item.isGap}>
-                            {item.isGap ? (
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            position: "absolute",
+                            top: -20,
+                            left: 4,
+
+                            // ellipsis requirements
+                            maxWidth: `${subseq.sequence.length * motifWidth - 8}px`,
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+
+                            fontFamily: "monospace",
+                            fontSize: "0.65rem",
+                            color: "text.primary",
+                            pointerEvents: "none",
+                          }}
+                        >
+                          {subseq.name || subseq.id}
+                        </Typography>
+                        <Box sx={{ display: "flex", flexDirection: "row", gap: 1 }}>
+                        {subseq.sequence.map((item) =>
+                          item.isGap ? (
+                            <Box
+                              key={item.id}
+                              sx={{
+                                m: 0,
+                                width: motifWidth,
+                                height: 20,
+                                backgroundColor: "transparent",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                // move up a bit
+                                mt: "2px",
+                                zIndex: 1000,
+                              }}
+                            >
                               <Box
                                 sx={{
-                                  m: 0,
-                                  width: motifWidth,
-                                  height: 20,
-                                  backgroundColor: "transparent",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
+                                  width: Math.max(5, 3 * zoom),
+                                  height: Math.max(5, 3 * zoom),
+                                  borderRadius: "50%",
+                                  backgroundColor: "text.secondary",
                                 }}
+                              />
+                            </Box>
+                          ) : (
+                            <Box
+                              key={item.id}
+                              component="span"
+                              sx={{
+                                backgroundColor: "background.paper",
+                                borderRadius: "10px",
+                                display: "inline-block",
+                                zIndex: 99,
+                              }}
+                            >
+                              <Tooltip
+                                title={
+                                  <span>
+                                    Motif name is{" "}
+                                    {isPolyketideMotif(item.name)
+                                      ? renderChipLabel(item.name, toDisplayName)
+                                      : renderTooltipLabel(item.name, toDisplayName)}
+                                  </span>
+                                }
+                                arrow
                               >
-                                <Box
+                                <Chip
+                                  label={renderChipLabel(item.name, toDisplayName)}
+                                  size="small"
                                   sx={{
-                                    width: Math.max(2, 3 * zoom),
-                                    height: Math.max(2, 3 * zoom),
-                                    borderRadius: "50%",
-                                    backgroundColor: "text.secondary",
+                                    borderRadius: "10px",
+                                    width: motifWidth,
+                                    height: 20,
+                                    textAlign: "center",
+                                    backgroundColor:
+                                      getMotifColor(item.name || "") || "background.paper",
+                                    border: "1px solid",
+                                    borderColor:
+                                      getMotifColor(item.name || "") || "primary.main",
+                                    zIndex: 100,
+                                    fontSize: `${Math.max(0.5, Math.min(1.0, zoom)) * 0.75}rem`,
+                                    transition: "background-color 0s ease-in-out",
+                                    // move up a bit
+                                    mt: "-2px",
                                   }}
                                 />
-                              </Box>
-                            ) : (
-                              <Box
-                                component="span"
-                                sx={{
-                                  backgroundColor: "background.paper",
-                                  borderRadius: 1,
-                                  display: "inline-block",
-                                  zIndex: 99,
-                                }}
-                              >
-                                <Tooltip
-                                  title={renderTooltipLabel(item.name, toDisplayName)}
-                                  arrow
-                                >
-                                  <Chip
-                                    label={renderChipLabel(item.name, toDisplayName)}
-                                    size="small"
-                                    sx={{
-                                      mt: "-4px",
-                                      width: motifWidth,
-                                      height: 20,
-                                      textAlign: "center",
-                                      backgroundColor: getMotifColor(item.name || "") || "background.paper",
-                                      border: "1px solid",
-                                      borderColor: getMotifColor(item.name || "") || "primary.main",
-                                      zIndex: 100,
-                                      fontSize: `${Math.max(0.5, Math.min(1.0, zoom)) * 0.75}rem`,
-                                      transition: "background-color 0s ease-in-out",
-                                    }}
-                                  />
-                                </Tooltip>
-                              </Box>
-                            )}
-                          </SortableItem>
-                        ))}
-                      </SortableContext>
-                    </SortableRow>
-                  </React.Fragment>
+                              </Tooltip>
+                            </Box>
+                          )
+                        )}
+                        </Box>
+                      </Box>
+                    )})}
+                  </SortableRow>
+                  </Box>
                 ))}
               </Box>
             </SortableContext>

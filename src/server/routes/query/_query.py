@@ -197,11 +197,17 @@ def query_item():
     
     # Retrieve primary sequence from payload
     linear_readouts = payload.linear_readout.paths
-    linear_readout = max(linear_readouts, key=lambda x: len(x))
-    current_app.logger.debug(f"best linear readout has {len(linear_readout)} module(s)")
+    linear_readouts.sort(key=lambda x: len(x), reverse=True)
+    seq1_blocks: list[list[SequenceItem]] = []
+    for readout in linear_readouts:
+        seq1_blocks.append([SequenceItem.from_molnode(n) for n in readout])
+    # Flatten seq1 for alignment
+    seq1: list[SequenceItem] = []
+    for block in seq1_blocks:
+        seq1.extend(block)
 
-    # Parse linear_readout into sequence of SequenceItems
-    seq1: list[SequenceItem] = [SequenceItem.from_molnode(n) for n in linear_readout]
+
+    # NOTE: are we going to retrieve clusters/compounds based on a every block or combined?
 
     # ANN query against compounds and/or clusters
     keep_top = 1000
@@ -223,6 +229,7 @@ def query_item():
                 .where(
                     CandidateCluster.retromol_fp_counted_by_region.is_not(None),
                     # CandidateCluster.file_name.ilike("BGC%"),
+                    # CandidateCluster.file_name.ilike("BGC0000336"),
                 )
                 .order_by(dist.asc())
                 .limit(keep_top if (query_against_clusters and not query_against_compounds) else keep_top//2)
@@ -252,7 +259,7 @@ def query_item():
 
         # Assembly seq2 from rec
         seq2: list[list[SequenceItem]] = []
-        by_orf = False
+        by_orf = True
         if not by_orf: subs = [("seq", rec.biosynthetic_order(by_orf=by_orf))]
         else: subs = rec.biosynthetic_order(by_orf=by_orf)
         for _, mods in subs:
@@ -263,7 +270,7 @@ def query_item():
                 else: raise ValueError(f"unknown module type: {type(mod)}")
             seq2.append(seq2_sub)
         
-        if len(seq2):
+        if any(len(seq2_sub) for seq2_sub in seq2):
             # Dynamically create scoring matrix
             items = ["-"]
             items.extend(seq1)
@@ -275,11 +282,11 @@ def query_item():
                 sm,
                 "global",
                 target_internal_open_gap_score=-5.0,
-                target_left_open_gap_score=-5.0,
-                target_right_open_gap_score=-5.0,
+                target_left_open_gap_score=-2.5,
+                target_right_open_gap_score=-2.5,
                 query_internal_open_gap_score=-5.0,
-                query_left_open_gap_score=-5.0,
-                query_right_open_gap_score=-5.0,
+                query_left_open_gap_score=-2.5,
+                query_right_open_gap_score=-2.5,
                 label_fn=label_fn,
             )
             aln = dock_against_target(
@@ -301,7 +308,6 @@ def query_item():
                 if len(best_clusters) > keep_top:
                     best_clusters.pop()
 
-
     # Rerank compound rows through docking alignment
     best_compounds = []
     for compound, cosine_dist in compound_rows:
@@ -310,14 +316,16 @@ def query_item():
         # Assembly seq2 from rec
         # Retrieve primary sequence from payload
         compound_readouts = rec.linear_readout.paths
-        compound_readout = max(compound_readouts, key=lambda x: len(x))
-        seq2: list[SequenceItem] = [[SequenceItem.from_molnode(n) for n in compound_readout]]
+        compound_readouts.sort(key=lambda x: len(x), reverse=True)
+        seq2_blocks: list[list[SequenceItem]] = []
+        for readout in compound_readouts:
+            seq2_blocks.append([SequenceItem.from_molnode(n) for n in readout])
 
-        if len(seq2):
+        if any(len(seq2_sub) for seq2_sub in seq2_blocks):
             # Dynamically create scoring matrix
             items = ["-"]
             items.extend(seq1)
-            for seq2_sub in seq2:
+            for seq2_sub in seq2_blocks:
                 items.extend(seq2_sub)
             unique_items = list(set(items))
             sm, _ = create_substitution_matrix_dynamically(unique_items, compare=item_compare, label_fn=label_fn)
@@ -325,17 +333,17 @@ def query_item():
                 sm,
                 "global",
                 target_internal_open_gap_score=-5.0,
-                target_left_open_gap_score=-5.0,
-                target_right_open_gap_score=-5.0,
+                target_left_open_gap_score=-2.5,
+                target_right_open_gap_score=-2.5,
                 query_internal_open_gap_score=-5.0,
-                query_left_open_gap_score=-5.0,
-                query_right_open_gap_score=-5.0,
+                query_left_open_gap_score=-2.5,
+                query_right_open_gap_score=-2.5,
                 label_fn=label_fn,
             )
             aln = dock_against_target(
                 aligner=aligner,
                 target=seq1,
-                candidates=seq2,
+                candidates=seq2_blocks,
                 gap_repr="-",
                 allow_block_reverse=True,
                 strategy="nonoverlap",
@@ -346,7 +354,7 @@ def query_item():
             # TODO
 
             if len(best_compounds) < keep_top or alignment_score > best_compounds[-1][0]:
-                best_compounds.append((alignment_score, 1.0 - cosine_dist, compound, aln, seq2))
+                best_compounds.append((alignment_score, 1.0 - cosine_dist, compound, aln, seq2_blocks))
                 best_compounds.sort(key=lambda x: x[0], reverse=True)
                 if len(best_compounds) > keep_top:
                     best_compounds.pop()
@@ -376,16 +384,34 @@ def query_item():
         "sequence": [],
         "references": [],
     }
-    for x in linear_readout:
+    # for x in linear_readout:
+    #     subseq.append({
+    #         "id": str(uuid.uuid4()),
+    #         "isGap": False,
+    #         "name": x.identity.matched_rule.name if x.is_identified else None,
+    #         "smiles": x.identity.matched_rule.smiles if x.is_identified else None,
+    #     })
+    for i, block in enumerate(seq1_blocks):
+        subseq = []
+        for x in block:
+            subseq.append({
+                "id": str(uuid.uuid4()),
+                "isGap": False,
+                "name": x.name,
+                "smiles": None,
+            })
         msa_item["sequence"].append({
             "id": str(uuid.uuid4()),
-            "isGap": False,
-            "name": x.identity.matched_rule.name if x.is_identified else None,
-            "smiles": x.identity.matched_rule.smiles if x.is_identified else None,
+            "name": f"primary sequence {i + 1}",
+            "sequence": subseq,
         })
     msa.append(msa_item)
 
+    # NOTE: if nothing from seq2 block alignst to a block original alignemtn(target) the sequence should remain emptty, not full of gaps
+
     for i, (alignment_score, cosine_score, cluster, aln, blocks, source) in enumerate(combined[:20], 1):
+
+        msa_item = None
 
         if source == "compound":
 
@@ -403,21 +429,28 @@ def query_item():
                 "name": name,
                 "alignment_score": round(alignment_score, 3),
                 "cosine_score": round(cosine_score, 3),
-                "sequence": [
-                    {
-                        "id": str(uuid.uuid4()),
-                        "isGap": True,
-                        "name": None,
-                        "smiles": None,
-                    }
-                    for _ in range(len(linear_readout))
-                ],
+                "sequence": [],
                 "references": [{
                     "name": ref.name,
                     "database_name": ref.database_name,
                     "database_identifier": ref.database_identifier,
                 } for ref in refs],
             }
+
+            for i, block in enumerate(seq1_blocks):
+                msa_item["sequence"].append({
+                    "id": str(uuid.uuid4()),
+                    "name": f"primary sequence {i + 1}",
+                    "sequence": [
+                        {
+                            "id": str(uuid.uuid4()),
+                            "isGap": True,
+                            "name": None,
+                            "smiles": None,
+                        }
+                        for _ in range(len(block))
+                    ],
+                })
 
         
         if source == "cluster":
@@ -431,64 +464,100 @@ def query_item():
                 "name": cluster.file_name,
                 "alignment_score": round(alignment_score, 3),
                 "cosine_score": round(cosine_score, 3),
-                "sequence": [
-                    {
-                        "id": str(uuid.uuid4()),
-                        "isGap": True,
-                        "name": None,
-                        "smiles": None,
-                    }
-                    for _ in range(len(linear_readout))
-                ],
+                "sequence": [],
                 "references": [{
                     "name": ref.name,
                     "database_name": ref.database_name,
                     "database_identifier": ref.database_identifier,
                 } for ref in refs],
             }
-            
-        try:
-            # sort placements by start position
-            placements = sorted(aln.placements, key=lambda p: p.start)
-            for placement in placements:
 
-                is_reversed = placement.reversed
+            for i, block in enumerate(seq1_blocks):
+                msa_item["sequence"].append({
+                    "id": str(uuid.uuid4()),
+                    "name": f"gene {i + 1}",
+                    "sequence": [
+                        {
+                            "id": str(uuid.uuid4()),
+                            "isGap": True,
+                            "name": None,
+                            "smiles": None,
+                        }
+                        for _ in range(len(block))
+                    ],
+                })
+        
+        if msa_item:
+            try:
+                # sort placements by start position
+                print(aln)
+                placements = sorted(aln.placements, key=lambda p: p.start)
+                for placement in placements:
 
-                # get real identities instead of hashes of aligned blocks
-                block_idx = placement.block_idx
-                block = blocks[block_idx]
-                if is_reversed:
-                    block = list(reversed(block))
-                # gap_inds = [i for i, x in enumerate(placement.block_aln) if x == "-"]
-                # print(len(placement.block_aln), len(block), gap_inds)
+                    is_reversed = placement.reversed
 
-                placement_items = {}
-                placement_count = 0
-                for x in placement.block_aln:
-                    if x == "-":
-                        continue
-                    placement_items[placement_count] = block[placement_count]
-                    placement_count += 1
+                    # get real identities instead of hashes of aligned blocks
+                    block_idx = placement.block_idx  # THIS IS THE INDEX OF THE BLOCK IN THE CANDIDATE SEQUENCE
+                    block = blocks[block_idx]
+                    if is_reversed:
+                        block = list(reversed(block))
+                    # gap_inds = [i for i, x in enumerate(placement.block_aln) if x == "-"]
+                    # print(len(placement.block_aln), len(block), gap_inds)
 
-                start = placement.start
-                end = placement.end
-                it = 0
-                for idx in range(start, end + 1):
-                    name = placement_items[it].name
-                    if name.startswith("PKS_"):
-                        name = name.strip("PKS_")
-                    msa_item["sequence"][idx] = {
+                    print("block_idx", block_idx)
+
+                    placement_items = {}
+                    placement_count = 0
+                    for x in placement.block_aln:
+                        if x == "-":
+                            continue
+                        placement_items[placement_count] = block[placement_count]
+                        placement_count += 1
+                    print("placement count", placement_count)
+
+                    # NOTE: GAPS COULD BE INTRODUCED IN BOTH QUERY AND TARGET!!!!! DURING ALIGNMENT
+                    # NOTE: WHY ARENT THE SUGARS MATCHING/ALIGNING WITH ERYTHROMYCIN
+                    # NOTE: APPEND UNMATCHED PARTS TO THE END OF THE ALIGNMENT AS EXTRA BLOCKS, NEED TO CHECK PADDING AFTERWARDS
+
+                    start = placement.start
+                    end = placement.end
+                    print("start-end", start, end)
+                    it = 0
+                    for idx in range(start, end + 1):
+                        name = placement_items[it].name
+                        if name.startswith("PKS_"):
+                            name = name.strip("PKS_")
+                        offset = start
+                        msa_item["sequence"][0]["sequence"][idx] = {
+                            "id": str(uuid.uuid4()),
+                            "isGap": False,
+                            # "name": None, # could be filled in if needed
+                            "name": name,
+                            "smiles": None,  # could be filled in if needed
+                        }
+                        it += 1
+
+                for block_idx in aln.unused_blocks:
+                    unused_block = blocks[block_idx]
+                    msa_item["sequence"].append({
                         "id": str(uuid.uuid4()),
-                        "isGap": False,
-                        # "name": None, # could be filled in if needed
-                        "name": name,
-                        "smiles": None,  # could be filled in if needed
-                    }
-                    it += 1
-        except Exception as e:
-            pass
+                        "name": f"additional sequence {block_idx + 1}",
+                        "sequence": [],
+                    })
+                    for x in unused_block:
+                        msa_item["sequence"][-1]["sequence"].append({
+                            "id": str(uuid.uuid4()),
+                            "isGap": False,
+                            "name": x.name,
+                            "smiles": None,
+                        })
+                
+            except Exception as e:
+                pass
 
-        msa.append(msa_item)
+            msa.append(msa_item)
 
     # For now just return error
+    # return jsonify({"msa": msa}), 200
     return jsonify({"msa": msa}), 200
+
