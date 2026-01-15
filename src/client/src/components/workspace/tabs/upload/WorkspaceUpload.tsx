@@ -6,14 +6,16 @@ import CardContent from "@mui/material/CardContent";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import MuiLink from "@mui/material/Link";
+import Tooltip from "@mui/material/Tooltip";
 import NotificationsRoundedIcon from "@mui/icons-material/NotificationsRounded";
+import RefreshIcon from "@mui/icons-material/Refresh";
 import { useTheme } from "@mui/material/styles";
 import { useNotifications } from "../../NotificationProvider";
 import { Link as RouterLink } from "react-router-dom";
 import { DialogImportCompound } from "./DialogImportCompound";
 import { WorkspaceItemCard } from "./WorkspaceItemCard";
 import { Session } from "../../../../features/session/types";
-import { deleteSessionItem } from "../../../../features/session/api";
+import { deleteSessionItem, refreshSession } from "../../../../features/session/api";
 import { NewCompoundJob } from "../../../../features/jobs/types";
 import { MAX_ITEMS, importCompound, importCompoundsBatch } from "../../../../features/jobs/api";
 
@@ -75,6 +77,7 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
   const [openCompounds, setOpenCompounds] = React.useState(false);
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
   const [deletingIds, setDeletingIds] = React.useState<Set<string>>(new Set());
+  const [refreshSpinKey, setRefreshSpinKey] = React.useState(0); // to force re-mount of refresh icon
 
   // Clean up deletingIds when session items change
   React.useEffect(() => {
@@ -107,6 +110,19 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
     }),
     [setSessionSafe, pushNotification, session.sessionId]
   );
+
+  // Helper for manual refresh
+  const handleManualRefresh = async () => {
+    setRefreshSpinKey((k) => k + 1); // trigger re-mount of icon to restart animation
+    try {
+      const fresh = await refreshSession(session.sessionId);
+      setSession(() => fresh);
+      pushNotification("Workspace session refreshed successfully!", "success");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      pushNotification(`Failed to refresh session: ${msg}`, "error");
+    };
+  };
 
   // Selection helpers
   const toggleSelectItem = (id: string) => {
@@ -266,9 +282,30 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
               justifyContent="space-between"
               sx={{ mb: 1.5 }}
             >
-              <Typography component="h1" variant="subtitle1">
-                Workspace items ({session.items.length}/{MAX_ITEMS})
-              </Typography>
+              <Stack direction="row" alignItems="center" spacing={1}>
+                <Typography component="h1" variant="subtitle1">
+                  Workspace items ({session.items.length}/{MAX_ITEMS})
+                </Typography>
+                <Tooltip title="Refresh workspace items" arrow>
+                  <RefreshIcon
+                    key={refreshSpinKey} // to force re-mount
+                    fontSize="small"
+                    sx={{
+                      "@keyframes refresh-spin": {
+                        from: { transform: "rotate(0deg)" },
+                        to: { transform: "rotate(360deg)" },
+                      },
+                      animation: refreshSpinKey > 0 ? "refresh-spin 0.6s linear" : "none",
+                      cursor: "pointer",
+                      color: (theme.vars || theme).palette.text.secondary,
+                      "&:hover": {
+                        color: (theme.vars || theme).palette.text.primary,
+                      },
+                    }}
+                    onClick={handleManualRefresh}
+                  />
+                </Tooltip>
+              </Stack>
               <Stack direction="row" spacing={1}>
                 <Button
                   size="small"

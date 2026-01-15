@@ -4,6 +4,7 @@ from flask import Blueprint, current_app, request, jsonify
 
 from routes.session_store import load_item
 from routes.query.pipeline import cross_modal_retrieval
+from routes.query.align import MSAResult
 
 
 blp_query_item = Blueprint("query_item", __name__)
@@ -41,7 +42,7 @@ def query_item():
         return jsonify({"error": "Missing item payload"}), 400
     
     try:
-        msa_result = cross_modal_retrieval(
+        msa_result: MSAResult = cross_modal_retrieval(
             payload_type=payload_type,
             payload_blob=payload_blob,
             query_against_clusters=query_against_clusters,
@@ -51,4 +52,4 @@ def query_item():
         current_app.logger.error(f"error during cross-modal retrieval: {e}")
         return jsonify({"error": str(e)}), 500
     
-    return jsonify(msa_result), 200
+    return jsonify(msa_result.to_dict()), 200

@@ -5,7 +5,7 @@ from typing import Any, Sequence
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
-from bionexus.db.models import CandidateCluster, Compound
+from bionexus.db.models import CandidateCluster, Compound, Reference
 
 from routes.database import SessionLocal
 
@@ -120,3 +120,26 @@ def ann_search(
 
     # Should not have more than ANN_SEARCH_RADIUS items now, but just in case
     return combined[:ANN_SEARCH_RADIUS]
+
+
+def get_references(
+    session: Session,
+    model: type[CandidateCluster] | type[Compound],
+    model_id: int,
+) -> list[Reference]:
+    """
+    Get references for a given model instance.
+
+    :param session: the SQLAlchemy session
+    :param model: the SQLAlchemy model (CandidateCluster or Compound)
+    :param model_id: the ID of the model instance
+    :return: a list of Reference instances
+    """
+    stmt = (
+        sa.select(Reference)
+        .join(Reference.compounds if model is Compound else Reference.candidate_clusters)
+        .where((Compound.id if model is Compound else CandidateCluster.id) == model_id)
+        .order_by(Reference.database_name.asc(), Reference.database_identifier.asc())
+    )
+
+    return list(session.scalars(stmt).all())

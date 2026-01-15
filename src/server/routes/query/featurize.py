@@ -59,7 +59,10 @@ def _format_readout_compound(payload: Result) -> SequenceItemReadout:
         formatted_block = [NonGap.from_retromol_molnode(n) for n in path]
         formatted_blocks.append(formatted_block)
 
-    return SequenceItemReadout(blocks=formatted_blocks)
+    return SequenceItemReadout(
+        block_ids=[f"structural readout {i+1}" for i in range(len(formatted_blocks))],
+        blocks=formatted_blocks,
+    )
 
 
 def _format_readout_cluster(payload: LinearReadout) -> SequenceItemReadout:
@@ -74,7 +77,10 @@ def _format_readout_cluster(payload: LinearReadout) -> SequenceItemReadout:
         formatted_block = [NonGap.from_biocracker_module(m) for m in orf]
         formatted_blocks.append(formatted_block)
 
-    return SequenceItemReadout(blocks=formatted_blocks)
+    return SequenceItemReadout(
+        block_ids=[f"ORF {orf_name}" for orf_name, _ in payload.biosynthetic_order(by_orf=True)],
+        blocks=formatted_blocks,
+    )
 
 
 def format_payload_readout(

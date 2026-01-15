@@ -204,9 +204,9 @@ export const defaultMotifColorMap = (): Record<string, string> => {
     // plain (opaque) base
     newColorMap[key] = color;
 
-    // numbered variants 1->15 -> alpha = 1/15...15/15
-    for (let i = 1; i <= 15; i++) {
-      const alpha = 1 - (i / 15);
+    // numbered variants 1->20 -> alpha = 1/20...20/20
+    for (let i = 1; i <= 20; i++) {
+      const alpha = 1 - (i / 20);
       const alphaRounded = Math.round(alpha * 1000) / 1000;
       newColorMap[`${key}${i}`] = parseColor(color, alphaRounded);
     };

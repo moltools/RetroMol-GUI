@@ -168,9 +168,11 @@ class SequenceItemReadout:
     """
     Readout of sequence items in query results.
 
+    :var block_ids: list of block identifiers for display purposes
     :var blocks: list of blocks, where each block is a list of SequenceItems
     """
 
+    block_ids: list[str]  # only for display purposes
     blocks: list[list[SequenceItem]]
 
     def flatten_items(self) -> list[SequenceItem]:

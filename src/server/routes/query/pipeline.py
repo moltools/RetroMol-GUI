@@ -218,13 +218,17 @@ def merge_dockings_into_global_alignment(
                     continue
 
             if b_tok == gap_repr:
+                # Keep block ownership for gap columns, but never override a real token
+                if row[gcol] == gap_repr and score_row[gcol] < float(p.score):
+                    score_row[gcol] = float(p.score)
+                    block_map[gcol] = p.block_idx
                 continue
 
             # Resolve collisions within the same row
             if score_row[gcol] < float(p.score):
                 row[gcol] = b_tok
                 score_row[gcol] = float(p.score)
-                # Mark block owernship
+                # Mark block ownership
                 block_map[gcol] = p.block_idx
 
     # Build rows\
@@ -290,6 +294,7 @@ def cross_modal_retrieval(
     # Featurize nearest neighbors as SequenceItemReadout with cosine SCORE (1 - distance)
     nns_featurized: list[SequenceItemReadout] = []
     nns_cosine_scores: list[float] = []
+    retrieved_items: list[CandidateCluster | Compound] = []
     for item, distance in nns:
         assert isinstance(item, (CandidateCluster, Compound)), "expected item to be CandidateCluster or Compound"
         item_type = "cluster" if isinstance(item, CandidateCluster) else "compound"
@@ -298,6 +303,7 @@ def cross_modal_retrieval(
         item_readout = format_payload_readout(item_type, item_payload)
         nns_featurized.append(item_readout)
         nns_cosine_scores.append(1.0 - distance)
+        retrieved_items.append(item)
 
     if not nns_featurized or not query_blocks:
         raise ValueError("no nearest neighbors found or query blocks are empty")
@@ -314,6 +320,7 @@ def cross_modal_retrieval(
     current_app.logger.debug(f"top k indices: {top_k_indices}")
 
     top_k_nns_featurized    = [nns_featurized[i] for i in top_k_indices]
+    top_k_retrieved_items   = [retrieved_items[i] for i in top_k_indices]
     top_k_aln_results       = [aln_results[i] for i in top_k_indices]
     top_k_aln_scores        = [aln_scores[i] for i in top_k_indices]
     top_k_cosine_scores     = [nns_cosine_scores[i] for i in top_k_indices]
@@ -328,115 +335,22 @@ def cross_modal_retrieval(
         gap_repr=Gap.alignment_representation(),
     )
 
-    msa_result = {"msa": []}
+    for x in top_k_aln_results:
+        print(x.unused_blocks)
 
-    # Format row[0] as target
-    mapping = {item_label_fn(item): item for item in query_blocks.flatten_items()}
-    msa_item = {
-        "id": str(uuid.uuid4()),
-        "name": "Query",
-        "alignment_score": None,
-        "cosine_score": None,
-        "sequence": [
-            {
-                "id": str(uuid.uuid4()),
-                "name": "query primary sequence",
-                "sequence": [
-                    {
-                        "id": str(uuid.uuid4()),
-                        "isGap": (tok == Gap.alignment_representation()),
-                        "name": mapping.get(tok).display_name if tok in mapping else "unknown",
-                        "smiles": None,
-                    }
-                    for tok in rows[0]
-                ]
-            }
-        ],
-        "references": []
-    }
-    msa_result["msa"].append(msa_item)
 
-    max_len = len(rows[0])
-
-    # We now need to translate the tokenized SequenceItems back to their original SequenceItems
-    for i in range(1, len(rows[1:])):  # skip target row at index 0
-        row = rows[i]
-        block_map = block_maps[i]
-
-        # Create map
-        readout = nns_featurized[top_k_indices[i]]
-        mapping = {item_label_fn(item): item for item in readout.flatten_items()}
-
-        msa_item = {
-            "id": str(uuid.uuid4()),
-            "name": f"Result {i+1}",
-            "alignment_score": top_k_aln_scores[i],
-            "cosine_score": top_k_cosine_scores[i],
-            "sequence": [],
-            "references": [],
-        }
-        # Create subseq per block idx, in order of appearance in block_map
-        block_idx_to_subseq: dict[int, list[dict[str, Any]]] = {}
-        block_order: list[int] = []
-
-        for col_idx, tok in enumerate(row):
-            block_idx = block_map[col_idx]
-            if block_idx is None:
-                continue  # skip columns not owned by a block
-
-            if block_idx not in block_idx_to_subseq:
-                block_idx_to_subseq[block_idx] = []
-                block_order.append(block_idx)
-
-            if tok == Gap.alignment_representation():
-                seq_item = {
-                    "id": str(uuid.uuid4()),
-                    "isGap": True,
-                    "name": Gap().display_name,
-                    "smiles": None,
-                }
-            else:
-                obj = mapping.get(tok)
-                seq_item = {
-                    "id": str(uuid.uuid4()),
-                    "isGap": False,
-                    "name": obj.display_name if obj is not None else DISPLAY_NAME_UNIDENTIFIED,
-                    "smiles": None,
-                }
-
-            block_idx_to_subseq[block_idx].append(seq_item)
-
-        msa_item["sequence"] = [
-            {
-                "id": str(uuid.uuid4()),
-                "name": f"retrieved primary sequence block {block_idx}",
-                "sequence": block_idx_to_subseq[block_idx],
-            }
-            for block_idx in block_order
-        ]
-
-        # Pad with gaps if needed
-        cum_len = 0
-        for subseq in msa_item["sequence"]:
-            cum_len += len(subseq["sequence"])
-        if cum_len < max_len:
-            len_diff = max_len - cum_len
-            msa_item["sequence"].append(
-                {
-                    "id": str(uuid.uuid4()),
-                    "name": "padding gap",
-                    "sequence": [
-                        {
-                            "id": str(uuid.uuid4()),
-                            "isGap": True,
-                            "name": Gap().display_name,
-                            "smiles": None,
-                        }
-                        for _ in range(len_diff)
-                    ]
-                }
-            )
-
-        msa_result["msa"].append(msa_item)
+    msa_result: MSAResult = MSAResult.from_alignment(
+        rows=rows,
+        block_maps=block_maps,
+        query_readout=query_blocks,
+        retrieved_readouts=top_k_nns_featurized,
+        retrieved_items=top_k_retrieved_items,
+        retrieved_alignment_scores=top_k_aln_scores,
+        retrieved_cosine_scores=top_k_cosine_scores,
+        label_fn=item_label_fn,
+        gap_repr=Gap.alignment_representation(),
+        display_name_unidentified=DISPLAY_NAME_UNIDENTIFIED,
+        gap_display_name=Gap().display_name,
+    )
 
     return msa_result
