@@ -190,7 +190,12 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
 
   const handleOpenBGCs = (event: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
     // event.currentTarget.blur(); // prevents 'Blocked aria-hidden on an element' warning
-    // Not implemented yet
+    console.log("dialog for BGC import not implemented yet");
+  };
+
+  const handleViewItem = (itemId: string) => {
+    // event.currentTarget.blur(); // prevents 'Blocked aria-hidden on an element' warning
+    console.log("dialog for viewing item not implemented yet:", itemId);
   };
 
   // Import compound handlers
@@ -344,6 +349,7 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
                   disabled={deletingIds.has(item.id)}
                   onToggleSelect={toggleSelectItem}
                   onDelete={handleDeleteItem}
+                  onView={handleViewItem}
                 />
               ))}
             </Stack>

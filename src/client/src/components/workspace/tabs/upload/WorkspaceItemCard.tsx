@@ -7,6 +7,7 @@ import Chip from "@mui/material/Chip";
 import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
 import DeleteIcon from "@mui/icons-material/Delete";
+import ViewIcon from "@mui/icons-material/Visibility";
 import CircularProgress from "@mui/material/CircularProgress";
 import { Gauge } from "@mui/x-charts/Gauge";
 import { SessionItem } from "../../../../features/session/types";
@@ -26,6 +27,7 @@ type WorkspaceItemCardProps = {
   disabled?: boolean;
   onToggleSelect: (id: string) => void;
   onDelete: (id: string) => void;
+  onView: (id: string) => void;
 };
 
 // Helper to format "X ago"
@@ -55,6 +57,7 @@ export const WorkspaceItemCard: React.FC<WorkspaceItemCardProps> = ({
   disabled = false,
   onToggleSelect,
   onDelete,
+  onView,
 }) => {
   const isCompound = item.kind === "compound"; // there are only two types: "compound" and "cluster"
   const itemScore = typeof item.score === "number" ? item.score : 0.0;
@@ -237,7 +240,18 @@ export const WorkspaceItemCard: React.FC<WorkspaceItemCardProps> = ({
               />
             </Tooltip>
           )}
-
+          <IconButton
+            size="small"
+            // disabled={disabled}
+            disabled={true}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (disabled) return;
+              onView(item.id);
+            }}
+          >
+            <ViewIcon fontSize="small" />
+          </IconButton>
           <IconButton
             size="small"
             disabled={disabled}

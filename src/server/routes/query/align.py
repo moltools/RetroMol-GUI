@@ -333,9 +333,17 @@ class MSAResult:
                 item_type = Compound if isinstance(item, Compound) else CandidateCluster
                 refs = get_references(session, item_type, item.id)
                 refs = [RowReference.from_reference(r) for r in refs]
+
+            if refs:
+                name = refs[0].name
+            else:
+                if isinstance(item, Compound):
+                    name = f"Compound {item.id}"
+                else:
+                    name = f"Cluster {item.file_name}"
             
             result.msa.append(MSARow(
-                name=f"Result {ridx}" if not refs else refs[0].name,
+                name=name,
                 alignment_score=retrieved_alignment_scores[ridx - 1],
                 cosine_score=retrieved_cosine_scores[ridx - 1],
                 sequence=blocks,
