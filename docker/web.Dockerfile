@@ -4,7 +4,8 @@ WORKDIR /usr/src/app
 
 # Client code lives in src/client
 COPY src/client/package*.json ./
-RUN npm ci
+# RUN npm ci
+RUN npm install
 COPY src/client ./
 RUN npm run build
 
