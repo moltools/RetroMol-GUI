@@ -43,6 +43,7 @@ export type MsaItem = {
   name?: string;
   alignment_score: number | null;
   cosine_score: number | null;
+  match_score: number | null;
   sequence: Sequence[];
   references: Reference[];
 };

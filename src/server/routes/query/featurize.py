@@ -72,13 +72,21 @@ def _format_readout_cluster(payload: LinearReadout) -> SequenceItemReadout:
     :param payload: the cluster payload object (LinearReadout)
     :return: the formatted readout as a sequence of sequences of SequenceItem
     """
+    block_ids = []
     formatted_blocks = []
     for orf_name, orf in payload.biosynthetic_order(by_orf=True):
         formatted_block = [NonGap.from_biocracker_module(m) for m in orf]
+        block_ids.append(f"ORF {orf_name}")
+        formatted_blocks.append(formatted_block)
+
+    # Process found modifiers into individual blocks
+    for modifier in payload.modifiers:  
+        block_ids.append(modifier)
+        formatted_block = [NonGap.from_biocracker_modifier(modifier)]
         formatted_blocks.append(formatted_block)
 
     return SequenceItemReadout(
-        block_ids=[f"ORF {orf_name}" for orf_name, _ in payload.biosynthetic_order(by_orf=True)],
+        block_ids=block_ids,
         blocks=formatted_blocks,
     )
 

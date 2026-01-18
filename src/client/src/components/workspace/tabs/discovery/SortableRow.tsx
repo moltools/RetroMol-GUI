@@ -57,6 +57,7 @@ export const SortableRow: React.FC<SortableRowProps> = ({
 
   const alignText = fmt(row.alignment_score, 2);
   const cosineText = fmt(row.cosine_score, 2);
+  const matchText = fmt(row.match_score, 2);
   const scoreBlockWidth = 40;
 
   return (
@@ -172,6 +173,18 @@ export const SortableRow: React.FC<SortableRowProps> = ({
                 }}
               >
                 {cosineText}
+              </Typography>
+            </Tooltip>
+            <Tooltip title={`Ratio of items aligned: ${matchText}`} placement="right" arrow>
+              <Typography
+                variant="caption"
+                sx={{
+                  lineHeight: 1,
+                  fontFamily: "monospace",
+                  fontSize: "0.70rem",
+                }}
+              >
+                {matchText}
               </Typography>
             </Tooltip>
           </Stack>

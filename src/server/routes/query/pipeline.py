@@ -304,19 +304,19 @@ def cross_modal_retrieval(
         nns_featurized.append(item_readout)
         nns_cosine_scores.append(1.0 - distance)
         retrieved_items.append(item)
-
+    
     if not nns_featurized or not query_blocks:
         raise ValueError("no nearest neighbors found or query blocks are empty")
 
     # Rerank nearest neighbors by alignment
-    alignment_results: tuple[list[DockingResult], list[float]] = score_by_alignment(query_blocks, nns_featurized)
-    aln_results, aln_scores = alignment_results
+    alignment_results: tuple[list[DockingResult], list[float], list[float]] = score_by_alignment(query_blocks, nns_featurized)
+    aln_results, aln_scores, aln_match_scores = alignment_results
 
     if not aln_results or not aln_scores:
         raise ValueError("alignment scoring failed; no results or scores obtained")
 
-    # Get top K nns_featurized and aln_results; first sorted on aln_scores, then on nns_cosine_scores
-    top_k_indices = sorted(range(len(aln_scores)), key=lambda i: (aln_scores[i], nns_cosine_scores[i]), reverse=True)[:top_k]
+    # Get top K nns_featurized and aln_results; first sorted on aln_scores, then on nns_cosine_scores, and then on aln_match_scores
+    top_k_indices = sorted(range(len(aln_scores)), key=lambda i: (aln_scores[i], nns_cosine_scores[i], aln_match_scores[i]), reverse=True)[:top_k]
     current_app.logger.debug(f"top k indices: {top_k_indices}")
 
     top_k_nns_featurized    = [nns_featurized[i] for i in top_k_indices]
@@ -324,9 +324,10 @@ def cross_modal_retrieval(
     top_k_aln_results       = [aln_results[i] for i in top_k_indices]
     top_k_aln_scores        = [aln_scores[i] for i in top_k_indices]
     top_k_cosine_scores     = [nns_cosine_scores[i] for i in top_k_indices]
+    top_k_match_scores      = [aln_match_scores[i] for i in top_k_indices]
 
     current_app.logger.debug(f"found {len(top_k_nns_featurized)} top-k nearest neighbors after reranking")
-    current_app.logger.debug(f"top scores for first nearest neighbor: aln {top_k_aln_scores[0]}, cosine {top_k_cosine_scores[0]}")
+    current_app.logger.debug(f"top scores for first nearest neighbor: aln {top_k_aln_scores[0]}, cosine {top_k_cosine_scores[0]}, match {top_k_match_scores[0]}")
 
     # Merge top K dockings into global alignment
     rows, block_maps = merge_dockings_into_global_alignment(
@@ -334,10 +335,6 @@ def cross_modal_retrieval(
         dockings=top_k_aln_results,
         gap_repr=Gap.alignment_representation(),
     )
-
-    for x in top_k_aln_results:
-        print(x.unused_blocks)
-
 
     msa_result: MSAResult = MSAResult.from_alignment(
         rows=rows,
@@ -347,6 +344,7 @@ def cross_modal_retrieval(
         retrieved_items=top_k_retrieved_items,
         retrieved_alignment_scores=top_k_aln_scores,
         retrieved_cosine_scores=top_k_cosine_scores,
+        retrieved_match_scores=top_k_match_scores,
         label_fn=item_label_fn,
         gap_repr=Gap.alignment_representation(),
         display_name_unidentified=DISPLAY_NAME_UNIDENTIFIED,

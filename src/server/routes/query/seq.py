@@ -18,11 +18,13 @@ from biocracker.query.modules import (
 )
 
 DEFAULT_GAP_REPR = "-"
+DEFAULT_MASK_REPR = "X"
 
 MORGAN_RADIUS = 2
 MORGAN_SIZE = 2048
 
 DISPLAY_NAME_UNIDENTIFIED = "unknown"
+DISPLAY_NAME_MASK = "masked"
 
 
 @dataclass(frozen=True)
@@ -32,6 +34,40 @@ class SequenceItem:
     """
 
     ...
+
+
+@dataclass(frozen=True)
+class Mask(SequenceItem):
+    """
+    Mask sequence item representing a masked or unknown module.
+    """
+
+    display_name: str = DEFAULT_MASK_REPR
+
+    def __str__(self) -> str:
+        """
+        String representation of the SequenceItem.
+
+        :return: string representation
+        """
+        return self.display_name
+    
+    def __hash__(self) -> int:
+        """
+        Hash function for SequenceItem.
+
+        :return: hash value
+        """
+        return hash(self.display_name)
+    
+    @classmethod
+    def alignment_representation(cls) -> str:
+        """
+        Representation used in alignments.
+
+        :return: alignment representation string
+        """
+        return str(hash(cls(DEFAULT_MASK_REPR)))
 
 
 @dataclass(frozen=True)
@@ -161,6 +197,16 @@ class NonGap(SequenceItem):
                 return cls(display_name=display_name, morgan_fp=morgan_fp, ancestor_tokens=["NRPS"])
             case _:
                 raise NotImplementedError(f"BioCracker module type {type(m)} not supported yet")
+    
+    @classmethod
+    def from_biocracker_modifier(cls, modifier: str) -> "SequenceItem":
+        """
+        Create a SequenceItem from a BioCracker modifier.
+
+        :param modifier: BioCracker modifier string
+        :return: SequenceItem
+        """
+        return cls(display_name=modifier, family_tokens=[modifier])
 
 
 @dataclass(frozen=True)

@@ -16,6 +16,7 @@ from routes.query.retrieve import get_references
 from routes.query.seq import (
     DISPLAY_NAME_UNIDENTIFIED,
     SequenceItem,
+    Mask,
     Gap,
     NonGap,
     SequenceItemReadout,
@@ -122,6 +123,7 @@ class MSARow:
     :var references: list of RowReferences for this row
     :var alignment_score: optional alignment score
     :var cosine_score: optional cosine similarity score
+    :var match_score: ratio of items aligned against target
     :var id: unique identifier
     """
 
@@ -131,6 +133,7 @@ class MSARow:
 
     alignment_score: float | None = None
     cosine_score: float | None = None
+    match_score: float | None = None
     id: str = field(default_factory=generate_guid)
 
     def to_dict(self) -> dict[str, Any]:
@@ -145,6 +148,7 @@ class MSARow:
             "references": [ref.to_dict() for ref in self.references],
             "alignment_score": self.alignment_score,
             "cosine_score": self.cosine_score,
+            "match_score": self.match_score,
             "id": self.id,
         }
 
@@ -179,6 +183,7 @@ class MSAResult:
         retrieved_items: list[Compound | CandidateCluster],
         retrieved_alignment_scores: list[float],
         retrieved_cosine_scores: list[float],
+        retrieved_match_scores: list[float],
         # How to label items consistently with the tokens used in rows
         label_fn: Callable[[Any], str],
         gap_repr: str,
@@ -195,6 +200,7 @@ class MSAResult:
         :param retrieved_items: list of retrieved Compound or CandidateCluster items
         :param retrieved_alignment_scores: list of alignment scores for retrieved rows
         :param retrieved_cosine_scores: list of cosine similarity scores for retrieved rows
+        :param retrieved_match_scores: list of match scores for retrieved rows
         :param label_fn: function to label items consistently with the tokens used in rows
         :param gap_repr: string representation used for gaps in the alignment
         :param display_name_unidentified: display name for unidentified items
@@ -264,6 +270,7 @@ class MSAResult:
             name="Query",
             alignment_score=None,
             cosine_score=None,
+            match_score=None,
             sequence=query_blocks,
             references=[],
         )
@@ -284,6 +291,9 @@ class MSAResult:
         
         if len(retrieved_cosine_scores) != len(rows) - 1:
             raise ValueError("retrieved_cosine_scores/rows length mismatch")
+        
+        if len(retrieved_match_scores) != len(rows) - 1:
+            raise ValueError("retrieved_match_scores/rows length mismatch")
         
         for ridx in range(1, len(rows)):
             row_tokens = rows[ridx]
@@ -346,6 +356,7 @@ class MSAResult:
                 name=name,
                 alignment_score=retrieved_alignment_scores[ridx - 1],
                 cosine_score=retrieved_cosine_scores[ridx - 1],
+                match_score=retrieved_match_scores[ridx - 1],
                 sequence=blocks,
                 references=refs,
             ))
@@ -357,20 +368,46 @@ def item_compare_fn(a: SequenceItem, b:  SequenceItem) -> float:
     """
     Compare two SequenceItems or Gaps for sorting.
     """
+    score = 0.0
+    mask_penalty = -1e6
+
+    # Deal with masks
+    if isinstance(a, Mask) and isinstance(b, Mask):
+        return 0.0  # identical masks
+    elif (isinstance(a, Mask) and isinstance(b, NonGap)) or (isinstance(b, Mask) and isinstance(a, NonGap)):
+        return mask_penalty
+    elif (isinstance(a, Mask) and isinstance(b, Gap)) or (isinstance(b, Mask) and isinstance(a, Gap)):
+        return score  # same as gap vs gap/non-gap
+
     # Deal with gaps first
     if isinstance(a, Gap) or isinstance(b, Gap):
-        return 0.0
+        return score
     
     # Both items are non-gaps at this point
     if isinstance(a, NonGap) and isinstance(b, NonGap):
-        if a.morgan_fp is not None and b.morgan_fp is not None:
-            return calculate_tanimoto_similarity(a.morgan_fp, b.morgan_fp)
         
-        if a.display_name == DISPLAY_NAME_UNIDENTIFIED or b.display_name == DISPLAY_NAME_UNIDENTIFIED:
+        # Compare family tokens
+        a_fam_toks = set(a.family_tokens)
+        b_fam_toks = set(b.family_tokens)
+        fam_tok_overlap = a_fam_toks.intersection(b_fam_toks)
+
+        # Compare ancestor tokens
+        a_anc_toks = set(a.ancestor_tokens)
+        b_anc_toks = set(b.ancestor_tokens)
+        anc_tok_overlap = a_anc_toks.intersection(b_anc_toks)
+
+        tok_overlap = fam_tok_overlap.union(anc_tok_overlap)
+        score += 0.5 * len(tok_overlap)
+
+        if a.morgan_fp is not None and b.morgan_fp is not None:
+            score += calculate_tanimoto_similarity(a.morgan_fp, b.morgan_fp)
+            return score
+        
+        elif a.display_name == DISPLAY_NAME_UNIDENTIFIED or b.display_name == DISPLAY_NAME_UNIDENTIFIED:
             return 0.0  # could be correct, but we don't know
         
-        if a.display_name == b.display_name:  # NOTE: this is a display name, not unique
-            return 1.0
+        else:
+            return score
 
     return -2.0
 
@@ -398,7 +435,7 @@ def _setup_aligner(
     """
     readout1_items = readout1.flatten_items()
     readout2_items = readout2.flatten_items()
-    unique_items = list(set(readout1_items + readout2_items + [Gap()]))
+    unique_items = list(set(readout1_items + readout2_items + [Gap(), Mask()]))
     sm, _ = create_substitution_matrix_dynamically(
         unique_items,
         compare=item_compare_fn,
@@ -408,8 +445,19 @@ def _setup_aligner(
     aligner = setup_aligner(
         sm,
         "global",
+        # Gap penalties
         target_internal_open_gap_score=-5.0,
         query_internal_open_gap_score=-5.0,
+        # We don't care about gaps at the ends for docking
+        target_left_open_gap_score=0.0,
+        target_right_open_gap_score=0.0,
+        target_left_extend_gap_score=0.0,
+        target_right_extend_gap_score=0.0,
+        query_left_open_gap_score=0.0,
+        query_right_open_gap_score=0.0,
+        query_left_extend_gap_score=0.0,
+        query_right_extend_gap_score=0.0,
+        # Label function
         label_fn=item_label_fn,
     )
 
@@ -418,17 +466,20 @@ def _setup_aligner(
 
 def score_by_alignment(
     query: SequenceItemReadout,
-    items: list[SequenceItemReadout]
-) -> tuple[list[DockingResult], list[float]]:
+    items: list[SequenceItemReadout],
+    unaligned_item_penalty: float = 0.5,
+) -> tuple[list[DockingResult], list[float], list[float]]:
     """
     Rerank nearest neighbors based on more accurate scoring.
 
     :param query: SequenceItemReadout of the query item
     :param items: list of SequenceItemReadouts to be scored against the query
+    :param unaligned_item_penalty: penalty per item per unaligned block
     :return: tuple of list of DockingResults and their corresponding scores
     """
     aln_results = []
     aln_scores: list[float] = []
+    match_scores: list[float] = []
 
     for item in items:
         aligner = _setup_aligner(query, item)
@@ -438,11 +489,27 @@ def score_by_alignment(
             target=query.flatten_items(),
             candidates=item.blocks,
             gap_repr=Gap.alignment_representation(),
+            mask_repr=Mask.alignment_representation(),
             allow_block_reverse=True,
-            strategy="nonoverlap",
         )
 
-        aln_results.append(aln)
-        aln_scores.append(aln.total_score)
+        # Get full length of item
+        cum_len = len(item.flatten_items())
+        aligned_items = cum_len - sum(len(item.blocks[block_idx]) for block_idx in aln.unused_blocks)
+        match_score = aligned_items / cum_len if cum_len > 0 else 0.0
+    
+        # Penalize unaligned regions
+        unaligned_items = 0
+        for block_idx in aln.unused_blocks:
+            # Get length of unaligned block and calculate penalty
+            len_unused_block = len(item.blocks[block_idx])
+            unaligned_items += len_unused_block
 
-    return aln_results, aln_scores
+        unaligned_penalty = unaligned_items * unaligned_item_penalty
+        aln_score = aln.total_score - unaligned_penalty
+
+        aln_results.append(aln)
+        aln_scores.append(aln_score)
+        match_scores.append(match_score)
+
+    return aln_results, aln_scores, match_scores
