@@ -28,7 +28,9 @@ def dsn_from_env() -> str:
     user = os.getenv("DB_USER", "app_ro")
     pwd = os.getenv("DB_PASS") or os.getenv("DB_PASSWORD", "apppass_ro")
 
-    return f"postgresql+psycopg://{user}:{pwd}@{host}:{port}/{name}"
+    url = f"postgresql+psycopg://{user}:{pwd}@{host}:{port}/{name}"
+    print(f"Constructed DSN: {url}")
+    return url
 
 
 engine = create_engine(dsn_from_env(), pool_pre_ping=True)
