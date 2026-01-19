@@ -25,6 +25,7 @@ export CACHE_DIR="$(pwd)/cache"
 
 # Define model paths
 export PARAS_MODEL_PATH="$(pwd)/models/all_substrates_model.paras.gz"
+export PFAM_HMM_DIR_PATH="$(pwd)/hmms/"
 
 # Make sure Flask can find the app
 export PYTHONPATH="$(pwd)/src/server"

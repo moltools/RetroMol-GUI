@@ -1,7 +1,5 @@
 """Blueprints for compound-related API endpoints."""
 
-from __future__ import annotations
-
 import time
 
 from flask import Blueprint, current_app, jsonify, request

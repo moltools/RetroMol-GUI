@@ -15,15 +15,15 @@ export const CompoundItemSchema = BaseItemSchema.extend({
   matchStereochemistry: z.boolean(),
 });
 
-export const ClusterSchema = BaseItemSchema.extend({
+export const ClusterItemSchema = BaseItemSchema.extend({
   kind: z.literal("cluster"),
   fileContent: z.string(),
 });
 
-export const SessionItemSchema = z.discriminatedUnion("kind", [CompoundItemSchema,ClusterSchema]);
+export const SessionItemSchema = z.discriminatedUnion("kind", [CompoundItemSchema, ClusterItemSchema]);
 
 export type CompoundItem = z.output<typeof CompoundItemSchema>;
-export type ClusterItem = z.output<typeof ClusterSchema>;
+export type ClusterItem = z.output<typeof ClusterItemSchema>;
 export type SessionItem = z.output<typeof SessionItemSchema>;
 
 export const SessionSchema = z.object({

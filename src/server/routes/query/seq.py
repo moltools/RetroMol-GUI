@@ -1,6 +1,7 @@
 """Module defining sequence item data structures for query results."""
 
 from dataclasses import dataclass, field
+from typing import Literal
 
 from rdkit.DataStructs.cDataStructs import ExplicitBitVect
 
@@ -195,6 +196,8 @@ class NonGap(SequenceItem):
                 mol = smiles_to_mol(smiles)
                 morgan_fp = mol_to_morgan_fingerprint(mol, radius=MORGAN_RADIUS, num_bits=MORGAN_SIZE)
                 return cls(display_name=display_name, morgan_fp=morgan_fp, ancestor_tokens=["NRPS"])
+            case NRPSModule(substrate=None):
+                return cls(display_name=DISPLAY_NAME_UNIDENTIFIED, ancestor_tokens=["NRPS"])
             case _:
                 raise NotImplementedError(f"BioCracker module type {type(m)} not supported yet")
     
@@ -214,10 +217,12 @@ class SequenceItemReadout:
     """
     Readout of sequence items in query results.
 
+    :var kind: either "compound" or "cluster"
     :var block_ids: list of block identifiers for display purposes
     :var blocks: list of blocks, where each block is a list of SequenceItems
     """
 
+    kind: Literal["compound", "cluster"]
     block_ids: list[str]  # only for display purposes
     blocks: list[list[SequenceItem]]
 
@@ -227,7 +232,9 @@ class SequenceItemReadout:
 
         :return: flattened list of SequenceItems
         """
-        # Sort blocks on size; longer blocks first
-        blocks_sorted = sorted(self.blocks, key=lambda b: len(b), reverse=True)
+        blocks = self.blocks
+        if self.kind == "compound":
+            # Only for compounds: sort blocks on size; longer blocks first
+            blocks = sorted(blocks, key=lambda b: len(b), reverse=True)
 
-        return [item for block in blocks_sorted for item in block]
+        return [item for block in blocks for item in block]

@@ -17,6 +17,12 @@ from versalign.docking import DockingResult, DockPlacement
 from bionexus.db.models import CandidateCluster, Compound
 
 
+# Turn off BiopythonDeprecationWarning warnings
+import warnings
+from Bio import BiopythonDeprecationWarning
+warnings.simplefilter("ignore", BiopythonDeprecationWarning)
+
+
 @dataclass(frozen=True)
 class _InsKey:
     """

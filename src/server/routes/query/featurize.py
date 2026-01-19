@@ -45,7 +45,7 @@ def calculate_payload_fingerprint(
     return fp
 
 
-def _format_readout_compound(payload: Result) -> SequenceItemReadout:
+def _format_readout_compound(payload: Result, fragment: bool = False) -> SequenceItemReadout:
     """
     Format the readout for a compound payload.
 
@@ -54,12 +54,17 @@ def _format_readout_compound(payload: Result) -> SequenceItemReadout:
     """
     linear_readouts: list[list[MolNode]] = payload.linear_readout.paths
 
+    if fragment:
+        # Flatten linear_readouts
+        linear_readouts = [[node] for path in linear_readouts for node in path]
+
     formatted_blocks = []
     for path in linear_readouts:
         formatted_block = [NonGap.from_retromol_molnode(n) for n in path]
         formatted_blocks.append(formatted_block)
 
     return SequenceItemReadout(
+        kind="compound",
         block_ids=[f"structural readout {i+1}" for i in range(len(formatted_blocks))],
         blocks=formatted_blocks,
     )
@@ -86,6 +91,7 @@ def _format_readout_cluster(payload: LinearReadout) -> SequenceItemReadout:
         formatted_blocks.append(formatted_block)
 
     return SequenceItemReadout(
+        kind="cluster",
         block_ids=block_ids,
         blocks=formatted_blocks,
     )

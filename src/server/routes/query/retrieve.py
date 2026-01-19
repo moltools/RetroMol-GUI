@@ -10,7 +10,7 @@ from bionexus.db.models import CandidateCluster, Compound, Reference
 from routes.database import SessionLocal
 
 
-ANN_SEARCH_RADIUS = 1000
+ANN_SEARCH_RADIUS = 2000  # increasing this will increase latency, but also improve results
 
 HNSW_SETTINGS = {
     "hnsw.iterative_scan": "strict_order",

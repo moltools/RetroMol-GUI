@@ -214,12 +214,18 @@ class MSAResult:
 
         # Query row: split into original blocks for display
         q_map = {label_fn(it): it for it in query_readout.flatten_items()}
+        
+        if query_readout.kind == "compound":
+            # We sort on length descending for compounds
+            block_order = sorted(
+                range(len(query_readout.blocks)),
+                key=lambda i: len(query_readout.blocks[i]),
+                reverse=True,
+            )
+        else:
+            # Keep original order for clusters
+            block_order = list(range(len(query_readout.blocks)))
 
-        block_order = sorted(
-            range(len(query_readout.blocks)),
-            key=lambda i: len(query_readout.blocks[i]),
-            reverse=True,
-        )
         target_block_indices = [
             bidx for bidx in block_order for _ in query_readout.blocks[bidx]
         ]
@@ -390,14 +396,19 @@ def item_compare_fn(a: SequenceItem, b:  SequenceItem) -> float:
         a_fam_toks = set(a.family_tokens)
         b_fam_toks = set(b.family_tokens)
         fam_tok_overlap = a_fam_toks.intersection(b_fam_toks)
+        fam_tok_differs = a_fam_toks.symmetric_difference(b_fam_toks)
 
         # Compare ancestor tokens
         a_anc_toks = set(a.ancestor_tokens)
         b_anc_toks = set(b.ancestor_tokens)
         anc_tok_overlap = a_anc_toks.intersection(b_anc_toks)
+        anc_tok_differs = a_anc_toks.symmetric_difference(b_anc_toks)
 
         tok_overlap = fam_tok_overlap.union(anc_tok_overlap)
         score += 0.5 * len(tok_overlap)
+
+        tok_differs = fam_tok_differs.union(anc_tok_differs)
+        score -= 0.5 * len(tok_differs)
 
         if a.morgan_fp is not None and b.morgan_fp is not None:
             score += calculate_tanimoto_similarity(a.morgan_fp, b.morgan_fp)

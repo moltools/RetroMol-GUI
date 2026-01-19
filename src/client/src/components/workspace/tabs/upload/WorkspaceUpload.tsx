@@ -13,11 +13,12 @@ import { useTheme } from "@mui/material/styles";
 import { useNotifications } from "../../NotificationProvider";
 import { Link as RouterLink } from "react-router-dom";
 import { DialogImportCompound } from "./DialogImportCompound";
+import { DialogImportCluster } from "./DialogImportCluster";
 import { WorkspaceItemCard } from "./WorkspaceItemCard";
 import { Session } from "../../../../features/session/types";
 import { deleteSessionItem, refreshSession } from "../../../../features/session/api";
 import { NewCompoundJob } from "../../../../features/jobs/types";
-import { MAX_ITEMS, importCompound, importCompoundsBatch } from "../../../../features/jobs/api";
+import { MAX_ITEMS, importCompound, importCompoundsBatch, importClustersBatch } from "../../../../features/jobs/api";
 
 const MAX_FILE_SIZE_MB = 2;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
@@ -75,6 +76,8 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
   const { pushNotification } = useNotifications();
 
   const [openCompounds, setOpenCompounds] = React.useState(false);
+  const [openClusters, setOpenClusters] = React.useState(false);
+
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
   const [deletingIds, setDeletingIds] = React.useState<Set<string>>(new Set());
   const [refreshSpinKey, setRefreshSpinKey] = React.useState(0); // to force re-mount of refresh icon
@@ -189,8 +192,8 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
   };
 
   const handleOpenBGCs = (event: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
-    // event.currentTarget.blur(); // prevents 'Blocked aria-hidden on an element' warning
-    console.log("dialog for BGC import not implemented yet");
+    event.currentTarget.blur(); // prevents 'Blocked aria-hidden on an element' warning
+    setOpenClusters(true);
   };
 
   const handleViewItem = (itemId: string) => {
@@ -215,6 +218,40 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       pushNotification(`Failed to parse compound file: ${msg}`, "error");
+    };
+  };
+
+  // Import cluster handler
+  const handleImportClusters = async (files: File[]) => {
+    if (!files.length) return;
+
+    const oversized = files.filter(f => f.size > MAX_FILE_SIZE_BYTES);
+    if (oversized.length > 0) {
+      pushNotification(`Some files exceed the maximum size of ${MAX_FILE_SIZE_MB} MB and were not imported: ${oversized.map(f => f.name).join(", ")}`, "error");
+
+      // Keep only files within size limit
+      files = files.filter(f => f.size <= MAX_FILE_SIZE_BYTES);
+    };
+
+    // Check if any files remain after filtering on file size
+    if (files.length === 0) {
+      pushNotification("No valid files to import after size filtering.", "warning");
+      return;
+    };
+
+    let payloads: { name: string; fileContent: string }[] = [];
+
+    try {
+      payloads = await Promise.all(
+        files.map(async (file) => ({
+          name: file.name,
+          fileContent: await file.text(),
+        }))
+      )
+      await importClustersBatch(deps, payloads);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      pushNotification(`Failed to import BGC files: ${msg}`, "error");
     };
   };
 
@@ -264,7 +301,7 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
               Import compounds
             </Button>
 
-            <Button variant="contained" onClick={handleOpenBGCs} disabled>
+            <Button variant="contained" onClick={handleOpenBGCs}>
               Import BGCs
             </Button>
           </Stack>
@@ -276,6 +313,12 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
         onClose={() => setOpenCompounds(false)}
         onImportSingle={handleImportSingleCompound}
         onImportBatch={handleImportBatchCompounds}
+      />
+
+      <DialogImportCluster
+        open={openClusters}
+        onClose={() => setOpenClusters(false)}
+        onImport={handleImportClusters}
       />
 
       {session.items.length > 0 && (
