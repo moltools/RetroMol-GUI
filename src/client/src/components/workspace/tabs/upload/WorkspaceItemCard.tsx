@@ -156,12 +156,18 @@ export const WorkspaceItemCard: React.FC<WorkspaceItemCardProps> = ({
 
           <Stack direction="column" spacing={0.5} sx={{ minWidth: 0, flex: 1 }}>
             <Stack direction="row" spacing={0.5} alignItems="center" sx={{ minWidth: 0 }}>
-              <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 0 }}>
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 0, flex: 1 }}>
                   <Typography
                     variant="body2"
                     fontWeight={500}
                     noWrap
-                    sx={{ maxWidth: 220, minWidth: 0 }}
+                    sx={{
+                      flex: 1,
+                      minWidth: 0,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
                   >
                     {item.name}
                   </Typography>
@@ -196,6 +202,20 @@ export const WorkspaceItemCard: React.FC<WorkspaceItemCardProps> = ({
               />
               <CircularProgress size={16} thickness={4} />
             </>
+          )}
+
+          {isCompound ? (
+            <Chip 
+              label="Compound"
+              size="small"
+              sx={{ fontSize: "0.7rem", height: 20 }}
+            />
+          ) : (
+            <Chip 
+              label="BGC"
+              size="small"
+              sx={{ fontSize: "0.7rem", height: 20 }}
+            />
           )}
 
           {isCompound && (
