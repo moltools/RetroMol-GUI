@@ -12,10 +12,13 @@ from biocracker.inference.registry import register_domain_model, register_gene_m
 from biocracker.pipelines.annotate_region import annotate_region
 from biocracker.query.modules import NRPSModule, PKSModule, linear_readout as biocracker_linear_readout
 
-from routes.session_store import load_session_with_items, update_item
+from routes.session_store import load_session_with_items, update_item, save_item, publish_session_event
 from routes.models_registry import get_paras_model, get_pfam_models
+from helpers.guid import generate_guid
 
 blp_submit_cluster = Blueprint("submit_cluster", __name__)
+
+MAX_ITEMS = int(os.getenv("MAX_ITEMS", "20"))
 
 
 def _set_item_status_inplace(item: dict, status: str, error_message: str | None = None) -> None:
@@ -107,8 +110,26 @@ def submit_cluster():
             tmp_path = tmp.name
             regions = load_regions(tmp_path, options=options)
 
-        # TODO: only saving readout of last candidate cluster found... need to keep all of them and create individual items for each
-        for region in regions:
+        if not regions:
+            raise ValueError("No candidate clusters found")
+
+        existing_count = len(full_sess.get("items", []) or [])
+        remaining_slots = MAX_ITEMS - existing_count
+        if remaining_slots < 0:
+            remaining_slots = 0
+
+        max_clusters = 1 + remaining_slots
+        if len(regions) > max_clusters:
+            current_app.logger.warning(
+                "submit_cluster: truncating candidate clusters to %s due to max items limit",
+                max_clusters,
+            )
+
+        base_name = name or item.get("name") or "Cluster"
+        file_blob = file_content or item.get("fileContent")
+
+        results: list[dict] = []
+        for region in regions[:max_clusters]:
             annotate_region(region)
             readout = biocracker_linear_readout(region)
 
@@ -128,16 +149,41 @@ def submit_cluster():
         
             score: float = sum(module_scores) / len(module_scores) if module_scores else 0.0
             result_as_dict: dict = readout.to_dict()
+            results.append({"score": score, "payload": result_as_dict})
+
+        def _candidate_name(idx: int, total: int) -> str:
+            if total <= 1:
+                return base_name
+            return f"{base_name} (candidate cluster {idx})"
 
         # Set final status=done and store results on this item only
         def mark_done(it: dict) -> None:
-            it["name"] = name or it.get("name")
-            it["fileContent"] = file_content or it.get("fileContent")
-            it["score"] = score
-            it["payload"] = result_as_dict
+            it["name"] = _candidate_name(1, len(results))
+            it["fileContent"] = file_blob
+            it["score"] = results[0]["score"]
+            it["payload"] = results[0]["payload"]
             _set_item_status_inplace(it, "done")
 
         update_item(session_id, item_id, mark_done)
+
+        extra_results = results[1:]
+        if extra_results:
+            now_ms = int(time.time() * 1000)
+            for idx, result in enumerate(extra_results, start=2):
+                new_item = {
+                    "id": generate_guid(),
+                    "kind": "cluster",
+                    "name": _candidate_name(idx, len(results)),
+                    "fileContent": file_blob,
+                    "status": "done",
+                    "errorMessage": None,
+                    "updatedAt": now_ms,
+                    "score": result["score"],
+                    "payload": result["payload"],
+                }
+                save_item(session_id, new_item)
+
+            publish_session_event(session_id, {"type": "session_merged"})
 
     except Exception as e:
         current_app.logger.exception(f"submit_cluster: error for item_id={item_id}")
