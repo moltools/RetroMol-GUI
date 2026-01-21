@@ -4,353 +4,66 @@ import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
 import Stack from "@mui/material/Stack";
 import Tooltip from "@mui/material/Tooltip";
-import ZoomOutIcon from "@mui/icons-material/ZoomOut";
-import ZoomInIcon from "@mui/icons-material/ZoomIn";
-import RefreshIcon from "@mui/icons-material/Refresh";
-import DownloadIcon from "@mui/icons-material/Download";
-import ExchangeIcon from "@mui/icons-material/SwapHoriz";
+
+import { DndContext, DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable";
+
 import { SortableRow } from "./SortableRow";
 import { useNotifications } from "../../NotificationProvider";
 
-// Imports for dragging and dropping rows and motifs
-import { DndContext, DragEndEvent } from "@dnd-kit/core";
-import {
-  SortableContext,
-  arrayMove,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-
-export type SequenceItem = {
-  id: string;
-  isGap: boolean;
-  name: string | null;
-  smiles: string | null;
-};
-
-export type Sequence = {
-  id: string;
-  name: string | null;
-  sequence: SequenceItem[];
-};
-
-export type MsaRow= {
-  id: string;
-  name?: string;
-  kind?: "compound" | "cluster" | null;
-  db_id?: number | null;
-  alignment_score: number | null;
-  cosine_score: number | null;
-  match_score: number | null;
-  sequence: Sequence[];
-};
-
-export type QueryResult = {
-  msa: MsaRow[];
-};
+import type { QueryResult, MsaRow } from "./types";
+import { PROTECTED_NAME_TO_CODE, isPolyketideMotif, makeToDisplayName, renderChipLabel, renderTooltipLabel } from "./motif";
+import { getMotifColor } from "./colors";
+import { buildMsaSvg, sequenceLength } from "./svg";
+import { QueryResultToolbar } from "./QueryResultToolbar";
 
 type QueryResultViewProps = {
   result: QueryResult;
 };
 
-export const PROTECTED_NAME_TO_CODE: Record<string, string> = {
-  ALANINE: "ALA",
-  CYSTEINE: "CYS",
-  ASPARTICACID: "ASP",
-  GLUTAMICACID: "GLU",
-  PHENYLALANINE: "PHE",
-  GLYCINE: "GLY",
-  HISTIDINE: "HIS",
-  ISOLEUCINE: "ILE",
-  LYSINE: "LYS",
-  LEUCINE: "LEU",
-  METHIONINE: "MET",
-  ASPARAGINE: "ASN",
-  PROLINE: "PRO",
-  GLUTAMINE: "GLN",
-  ARGININE: "ARG",
-  SERINE: "SER",
-  THREONINE: "THR",
-  VALINE: "VAL",
-  TRYPTOPHAN: "TRP",
-  TYROSINE: "TYR",
-};
-
-
-export const renderChiralSuperscripts = (label: string) => {
-  // Split into normal text + ^R/^S tokens
-  const parts = label.split(/(\^[RS])/g).filter(Boolean);
-
-  return (
-    <>
-      {parts.map((p, i) => {
-        if (p === "^R" || p === "^S") {
-          return (
-            <sup key={i} style={{ fontSize: "0.7em", lineHeight: 0 }}>
-              {p.slice(1)}
-            </sup>
-          );
-        }
-        return <React.Fragment key={i}>{p}</React.Fragment>;
-      })}
-    </>
-  );
-};
-
-const isPolyketideMotif = (s: string | null | undefined) => {
-  if (!s) return false;
-  return /^[A-D](\^[RS])*(\d+)?(\^[RS])*$/i.test(s.trim());
-};
-
-export const makeToDisplayName = (protectedNameToCode: Record<string, string>) => {
-  const norm = (s: string) => s.replace(/[^a-z0-9]/gi, "").toUpperCase();
-
-  // normalize protected names + reserve protected codes
-  const prot = new Map<string, string>(
-    Object.entries(protectedNameToCode).map(([k, v]) => [norm(k), norm(v)])
-  );
-  const reserved = new Set<string>(Array.from(prot.values())); // e.g. ALA, GLY
-  const used = new Set<string>(reserved);                      // block others from taking them
-  const cache = new Map<string, string>();                     // per-name stability
-
-  const candidates = (s: string) => {
-    const out: string[] = [];
-    if (s.length >= 3) {
-      out.push(s.slice(0, 3)); // ABC
-      for (let i = 3; i < s.length; i++) out.push(s[0] + s[1] + s[i]); // AB?
-      for (let i = 2; i < s.length; i++) out.push(s[0] + s[i - 1] + s[i]); // A??
-    }
-    if (s.length >= 2) out.push(s.slice(0, 2)); // AB
-    if (s.length >= 1) out.push(s[0]);          // A
-    // de-dupe in order
-    const seen = new Set<string>();
-    return out.filter(c => c.length <= 3 && !seen.has(c) && (seen.add(c), true));
-  };
-
-  return (name: string | null): string | null => {
-    if (!name) return null;
-    const s = norm(name);
-    if (!s) return null;
-
-    const hit = cache.get(s);
-    if (hit) return hit;
-
-    // ONLY protected full names get protected 3-letter codes
-    const canonical = prot.get(s);
-    if (canonical) {
-      cache.set(s, canonical);
-      return canonical;
-    }
-
-    // don’t let non-protected names steal reserved AA codes
-    for (const c of candidates(s)) {
-      if (!used.has(c)) {
-        used.add(c);
-        cache.set(s, c);
-        return c;
-      }
-    }
-    return null;
-  };
-};
-
-function parseColor(color: string, alpha: number): string {
-  // HEX case: "#RGB" or "#RRGGBB"
-  if (color.startsWith("#")) {
-    let hex = color.replace(/^#/, "");
-    // expand shorthand (#abc → aabbcc)
-    if (hex.length === 3) {
-      hex = hex.split("").map(c => c + c).join("");
-    }
-    // parse r, g, b
-    const r = parseInt(hex.slice(0, 2), 16);
-    const g = parseInt(hex.slice(2, 4), 16);
-    const b = parseInt(hex.slice(4, 6), 16);
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-  };
-
-  // HSL case: "hsl(h, s%, l%)"
-  const hsl = color.match(
-    /hsl\(\s*([\d.]+)(?:deg)?\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%\s*\)/
-  );
-  if (hsl) {
-    const h = hsl[1];
-    const s = hsl[2];
-    const l = hsl[3];
-    return `hsla(${h}, ${s}%, ${l}%, ${alpha})`;
-  };
-
-  throw new Error(`Unsupported color format: ${color}`);
-};
-
-export const canonicalMotifKey = (s: string): string => {
-  return s.trim().replace(/\s+/g, "").replace(/\^[RS]/g, "");
-};
-
-export const defaultMotifColorMap = (): Record<string, string> => {
-  const newColorMap: Record<string, string> = {};
-
-  const baseColors: Record<"A"|"B"|"C"|"D", string> = {
-    A: "#e74c3c", // red
-    B: "#27ae60", // green
-    C: "#2980b9", // blue
-    D: "#f39c12", // orange
-  };
-
-  for (const key of Object.keys(baseColors) as Array<keyof typeof baseColors>) {
-    const color = baseColors[key];
-    // plain (opaque) base
-    newColorMap[key] = color;
-
-    // numbered variants 1->20 -> alpha = 1/20...20/20
-    for (let i = 1; i <= 20; i++) {
-      const alpha = 1 - (i / 20);
-      const alphaRounded = Math.round(alpha * 1000) / 1000;
-      newColorMap[`${key}${i}`] = parseColor(color, alphaRounded);
-    };
-  };
-
-  return newColorMap;
-};
-
-const getMotifColor = (name: string): string | null => {
-  const colorMap = defaultMotifColorMap();
-  const key = canonicalMotifKey(name);
-  return colorMap[key] || null;
-};
-
-const renderChipLabel = (
-  rawName: string | null,
-  toDisplayName: (name: string | null) => string | null
-): React.ReactNode => {
-  const raw = rawName || "";
-  const displayLabel = isPolyketideMotif(raw)
-    ? raw
-    : (toDisplayName(raw) || "X");
-  return renderChiralSuperscripts(displayLabel);
-};
-
-const renderTooltipLabel = (
-  rawName: string | null,
-  toDisplayName: (name: string | null) => string | null
-): React.ReactNode => {
-  const raw = rawName || "";
-
-  // Polyketide: show the short display code in tooltip
-  if (isPolyketideMotif(raw)) {
-    return toDisplayName(raw) || raw; // fallback to raw if code not available
-  }
-
-  // Non-polyketide: show full original name in tooltip
-  return renderChiralSuperscripts(raw || "Unknown motif");
-};
-
-const escapeSvgText = (value: string) => 
-  value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-
-const toHex = (v: number) => v.toString(16).padStart(2, "0");
-
-const hslToRgb = (h: number, s: number, l: number) => {
-  // h: 0–360, s/l: 0–1
-  const c = (1 - Math.abs(2 * l - 1)) * s;
-  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
-  const m = l - c / 2;
-  const pick = (hp: number) =>
-    hp < 60 ? [c, x, 0] :
-    hp < 120 ? [x, c, 0] :
-    hp < 180 ? [0, c, x] :
-    hp < 240 ? [0, x, c] :
-    hp < 300 ? [x, 0, c] :
-    [c, 0, x];
-  const [r1, g1, b1] = pick(h);
-  return [
-    Math.round((r1 + m) * 255),
-    Math.round((g1 + m) * 255),
-    Math.round((b1 + m) * 255),
-  ];
-};
-
-const normalizeColor = (raw: string | undefined | null) => {
-  if (!raw) return "#f5f5f5";
-  const c = raw.trim();
-
-  // Already hex (#rgb, #rrggbb, #rrggbbaa)
-  if (/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(c)) return c;
-
-  // rgba()/rgb()
-  const rgba = c.match(/^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(?:\s*,\s*([\d.]+))?\s*\)$/i);
-  if (rgba) {
-    const [r, g, b, aRaw] = rgba.slice(1).map(Number);
-    const a = isNaN(aRaw) ? 1 : Math.max(0, Math.min(1, aRaw));
-    // composite over white to avoid transparency issues
-    const blend = (v: number) => Math.round((1 - a) * 255 + a * v);
-    return `#${toHex(blend(r))}${toHex(blend(g))}${toHex(blend(b))}`;
-  }
-
-  // hsla()/hsl()
-  const hsla = c.match(/^hsla?\(\s*([\d.]+)(?:deg)?\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%(?:\s*,\s*([\d.]+))?\s*\)$/i);
-  if (hsla) {
-    const h = Number(hsla[1]);
-    const s = Number(hsla[2]) / 100;
-    const l = Number(hsla[3]) / 100;
-    const a = hsla[4] === undefined ? 1 : Math.max(0, Math.min(1, Number(hsla[4])));
-    const [r, g, b] = hslToRgb(h, s, l);
-    const blend = (v: number) => Math.round((1 - a) * 255 + a * v);
-    return `#${toHex(blend(r))}${toHex(blend(g))}${toHex(blend(b))}`;
-  }
-
-  // Fallback
-  return "#f5f5f5";
-};
-
 export const QueryResultView: React.FC<QueryResultViewProps> = ({ result }) => {
   const { pushNotification } = useNotifications();
 
-  // Keep order locally
   const [msa, setMsa] = React.useState<MsaRow[]>(result.msa);
 
-  // Invert order of motifs in msa
-  const invertMsaMotifOrder = () => {
+  React.useEffect(() => {
+    setMsa(result.msa);
+  }, [result]);
+
+  // stable name->code mapping
+  const toDisplayName = React.useMemo(
+    () => makeToDisplayName(PROTECTED_NAME_TO_CODE),
+    []
+  );
+
+  const msaLength = React.useMemo(() => {
+    if (msa.length === 0) return 0;
+    return Math.max(...msa.map((r) => sequenceLength(r.sequence)));
+  }, [msa]);
+
+  // Zoom
+  const [zoom, setZoom] = React.useState<number>(1.0);
+  const handleZoomIn = () => setZoom((z) => Math.min(z + 0.1, 3.0));
+  const handleZoomOut = () => setZoom((z) => Math.max(z - 0.1, 0.5));
+  const handleZoomReset = () => setZoom(1.0);
+
+  const invertMsaMotifOrder = React.useCallback(() => {
     setMsa((prev) =>
       prev.map((row) => ({
         ...row,
         sequence: [...row.sequence]
           .reverse()
           .map((seq) => ({ ...seq, sequence: [...seq.sequence].reverse() })),
-      })))
-  };
+      }))
+    );
+  }, []);
 
-  // Zoom
-  const [zoom, setZoom] = React.useState<number>(1.0);
-  const handleZoomIn = () => setZoom(z => Math.min(z + 0.1, 3.0));
-  const handleZoomOut = () => setZoom(z => Math.max(z - 0.1, 0.5));
-  const handleZoomReset = () => setZoom(1.0);
-
-  const sequenceLength = (seqs: Sequence[]) =>
-    seqs.reduce((sum, seq) => sum + seq.sequence.length, 0);
-
-  const msaLength =
-    result.msa.length > 0
-      ? Math.max(...result.msa.map((r) => sequenceLength(r.sequence)))
-      : 0;
-
-  // const msaLength = result.msa.length > 0 ? Math.max(...result.msa.map((r) => r.sequence.length)) : 0;
-  const motifWidth = 50 * zoom;
   const labelWidth = 250;
-  const colTemplate = `${labelWidth}px repeat(${msaLength}, ${motifWidth}px) 1fr`;
+  const motifWidth = 50 * zoom;
+  const colTemplate = React.useMemo(() => {
+    return `${labelWidth}px repeat(${msaLength}, ${motifWidth}px) 1fr`;
+  }, [labelWidth, msaLength, motifWidth]);
 
-  const toDisplayName = React.useMemo(() => makeToDisplayName(PROTECTED_NAME_TO_CODE), []);
-
-  // If a new result comes in, refresh local state
-  React.useEffect(() => {
-    setMsa(result.msa);
-  }, [result]);
-
-  // Handle drag end
   const handleDragEnd = React.useCallback((event: DragEndEvent) => {
     const { active, over } = event;
     if (!over) return;
@@ -360,7 +73,6 @@ export const QueryResultView: React.FC<QueryResultViewProps> = ({ result }) => {
     if (activeId === overId) return;
 
     setMsa((prev) => {
-      // Row-level drag: both IDs must be row IDs
       const rowIds = new Set(prev.map((r) => r.id));
       const isRowDrag = rowIds.has(activeId) && rowIds.has(overId);
 
@@ -369,229 +81,40 @@ export const QueryResultView: React.FC<QueryResultViewProps> = ({ result }) => {
         const toIndex = prev.findIndex((r) => r.id === overId);
         if (fromIndex === -1 || toIndex === -1) return prev;
         return arrayMove(prev, fromIndex, toIndex);
-      };
+      }
 
-      // Item-level drag: both IDs must be in the SAME row
       let rowIndex = -1;
-      let fromCol = -1
+      let fromCol = -1;
       let toCol = -1;
 
       for (let r = 0; r < prev.length; r++) {
         const seq = prev[r].sequence;
         const aIdx = seq.findIndex((s) => s.id === activeId);
         const oIdx = seq.findIndex((s) => s.id === overId);
-
-        // Only reorder if both items are within the SAME row
         if (aIdx !== -1 && oIdx !== -1) {
           rowIndex = r;
           fromCol = aIdx;
           toCol = oIdx;
           break;
-        };
-      };
+        }
+      }
 
       if (rowIndex === -1) return prev;
 
       const row = prev[rowIndex];
       const newSeq = arrayMove([...row.sequence], fromCol, toCol);
-
-      return prev.map((r, idx) => idx === rowIndex ? { ...r, sequence: newSeq } : r);
+      return prev.map((r, idx) => (idx === rowIndex ? { ...r, sequence: newSeq } : r));
     });
   }, []);
 
-  const svgMotifLabel = (rawName: string | null, toDisplayName: (name: string | null) => string | null) => {
-    const raw = (rawName || "").trim();
-    if (!raw) return { isRich: false as const, text: "UNK" };
+  const handleDownloadMsaSvg = React.useCallback(() => {
+    const svg = buildMsaSvg({ msa, msaLength, toDisplayName });
 
-    if (isPolyketideMotif(raw)) {
-      // Keep raw and render ^R/^S as superscripts via tspans
-      const parts = raw.split(/(\^[RS])/g).filter(Boolean);
-      return { isRich: true as const, parts }; // parts includes "^R" tokens
-    }
-
-    return { isRich: false as const, text: toDisplayName(raw) || "X" };
-  };
-
-  const renderSvgTspansForPolyketide = (parts: string[]) => {
-    // ^R/^S as superscripts
-    return parts
-      .map((p) => {
-        if (p === "^R" || p === "^S") {
-          const v = escapeSvgText(p.slice(1));
-          return `<tspan baseline-shift="super" font-size="5.2">${v}</tspan>`;
-        }
-        return `<tspan>${escapeSvgText(p)}</tspan>`;
-      })
-      .join("");
-  };
-
-  const buildMsaSvg = () => {
-    const motifPx = 19.1955;
-    const rowChipH = 13.8131;
-
-    const rowGap = 5;
-    const subHeaderH = 8;
-    const rowBlockH = subHeaderH + rowChipH;
-
-    const padding = 12;
-
-    const labelW = 120;
-    const scoreW = 42;
-    const leftW = labelW + scoreW;
-  
-    const svgWidth = padding * 2 + leftW + motifPx * msaLength;
-    const svgHeight = padding * 2 + msa.length * rowBlockH + Math.max(0, msa.length - 1) * rowGap;
-
-    const lineSpan = Math.max(0, msaLength - 1) * motifPx;
-
-    const fmt = (v: number | null, digits: number) =>
-      v == null || Number.isNaN(v) ? "" : v.toFixed(digits);
-
-    const rowsSvg = msa
-    .map((row, rIdx) => {
-      const yTop = padding + rIdx * (rowBlockH + rowGap); // includes rowGap
-      const yHeader = yTop;                               // subseq header band
-      const yChips = yTop + subHeaderH;                   // motif chips
-
-      const rowName = escapeSvgText(row.name || row.id || "row");
-
-      const alignText = escapeSvgText(fmt(row.alignment_score, 2));
-      const cosineText = escapeSvgText(fmt(row.cosine_score, 2));
-      const matchText = escapeSvgText(fmt(row.match_score, 2));
-
-      const xLeft = padding;
-      const xName = xLeft + 6;
-      const xScoresRight = xLeft + leftW - 6;
-
-      const xMotifs = xLeft + leftW;
-
-      const lineY = yChips + rowChipH / 2;
-      const lineX1 = xMotifs;
-      const lineX2 = xMotifs + lineSpan + motifPx;
-
-      // --- build motif cells AND subseq header outlines ---
-      let col = 0;
-
-      const subseqHeaders = row.sequence.map((subseq) => {
-        const startCol = col;
-        const len = subseq.sequence.length;
-        col += len;
-
-        const allGaps = subseq.sequence.every((it) => it.isGap);
-        if (allGaps) return "";
-
-        const x = xMotifs + startCol * motifPx;
-        const w = len * motifPx;
-        const title = escapeSvgText(subseq.name || subseq.id || "");
-          
-        const h = subHeaderH + (rowChipH / 2);
-        const r = 4;
-
-        const headerPath = `
-          M ${x} ${yHeader + h}
-          L ${x} ${yHeader + r}
-          Q ${x} ${yHeader} ${x + r} ${yHeader}
-          L ${x + w - r} ${yHeader}
-          Q ${x + w} ${yHeader} ${x + w} ${yHeader + r}
-          L ${x + w} ${yHeader + h}
-          L ${x} ${yHeader + h}
-        `;
-
-        return `
-          <g>
-            <path
-              d="${headerPath}"
-              fill="#e0e0e0"
-              stroke="#bdbdbd"
-              stroke-width="0.8"
-            />
-            <text x="${x + 3}" y="${yHeader + (subHeaderH / 2) + 1}"
-              font-family="Helvetica" font-size="4" fill="#111"
-              dominant-baseline="middle">${title}</text>
-          </g>
-        `;
-      }).join("");
-
-      // reset col for actual motif cell generation
-      col = 0;
-
-      const cells = row.sequence.flatMap((subseq) =>
-        subseq.sequence.map((motif) => {
-          const x = xMotifs + col * motifPx;
-          col += 1;
-
-          if (motif.isGap) {
-            return "";
-          }
-
-          const fill = normalizeColor(getMotifColor(motif.name || "") || "#ffffff");
-          const label = svgMotifLabel(motif.name, toDisplayName);
-          
-          // lower text so it is vertically centered within the chip
-          const paddingText = 3;
-
-          return `
-            <g>
-              <rect x="${x}" y="${yChips}" width="${motifPx}" height="${rowChipH}"
-                rx="4" ry="4" fill="${fill}" stroke="#000000" stroke-width="0.9" />
-              <text x="${x + motifPx / 2}" y="${yChips + rowChipH / 2 + paddingText}"
-                font-family="Helvetica" font-size="7.2" font-weight="600" fill="#000"
-                dominant-baseline="middle" text-anchor="middle">
-                ${
-                  label.isRich
-                    ? renderSvgTspansForPolyketide(label.parts)
-                    : escapeSvgText(label.text)
-                }
-              </text>
-            </g>
-          `;
-        })
-      ).join("");
-
-      return `
-        <g>
-          <!-- left label area -->
-          <text x="${xName}" y="${yChips + rowChipH / 2 + 0.8}"
-            font-family="Helvetica" font-size="8.2" font-weight="600"
-            dominant-baseline="middle">${rowName}</text>
-
-          <!-- scores (3 stacked) -->
-          <text x="${xScoresRight}" y="${yChips + 3.5}"
-            font-family="monospace" font-size="7.0" fill="#111"
-            text-anchor="end">${alignText}</text>
-          <text x="${xScoresRight}" y="${yChips + 9.0}"
-            font-family="monospace" font-size="7.0" fill="#111"
-            text-anchor="end">${cosineText}</text>
-          <text x="${xScoresRight}" y="${yChips + 14.5}"
-            font-family="monospace" font-size="7.0" fill="#111"
-            text-anchor="end">${matchText}</text>
-
-          ${lineSpan > 0 ? `<line x1="${lineX1}" x2="${lineX2}" y1="${lineY}" y2="${lineY}"
-            stroke="#9e9e9e" stroke-width="0.9" />` : ""}
-
-          <!-- subseq header outlines -->
-          ${subseqHeaders}
-
-          <!-- motif cells -->
-          ${cells}
-        </g>
-      `;
-    })
-    .join("");
-
-    return `
-      <svg xmlns="http://www.w3.org/2000/svg" width="${svgWidth}" height="${svgHeight}">
-        <rect x="0" y="0" width="${svgWidth}" height="${svgHeight}" fill="#ffffff"/>
-        ${rowsSvg}
-      </svg>`;
-  };
-
-  const handleDownloadMsaSvg = () => {
-    const svg = buildMsaSvg();
     if (!svg) {
       pushNotification("No visible sequences to download.", "warning");
       return;
-    };
+    }
+
     const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -601,204 +124,158 @@ export const QueryResultView: React.FC<QueryResultViewProps> = ({ result }) => {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-  }
+  }, [msa, msaLength, pushNotification, toDisplayName]);
 
   return (
     <div>
       <Typography component="h1" variant="subtitle1">
         Query results
       </Typography>
-    
-      {/* Toolbar */}
-      <Box
-        sx={{
-          display: "flex",
-          flexDirection: "row",
-          justifyContent: "right",
-          alignItems: "center",
-          px: 2,
-          py: 1,
-        }}
-      >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <Tooltip title="Zoom MSA out" arrow><ZoomOutIcon onClick={handleZoomOut} sx={{ cursor: "pointer" }} /></Tooltip>
-          <Tooltip title="Zoom MSA in" arrow><ZoomInIcon onClick={handleZoomIn} sx={{ cursor: "pointer" }} /></Tooltip>
-          <Tooltip title="Reset zoom" arrow><RefreshIcon onClick={handleZoomReset} sx={{ cursor: "pointer" }} /></Tooltip>
-          <Tooltip title="Invert order of motifs" arrow><ExchangeIcon onClick={invertMsaMotifOrder} sx={{ cursor: "pointer" }} /></Tooltip>
-          <Tooltip title="Download as SVG" arrow><DownloadIcon onClick={handleDownloadMsaSvg} sx={{ cursor: "pointer" }} /></Tooltip>
-        </Box>
-      </Box>
+
+      <QueryResultToolbar
+        onZoomOut={handleZoomOut}
+        onZoomIn={handleZoomIn}
+        onZoomReset={handleZoomReset}
+        onInvertMotifs={invertMsaMotifOrder}
+        onDownloadSvg={handleDownloadMsaSvg}
+      />
 
       <Stack direction="column" spacing={1}>
-        <Box
-          sx={{
-            width: "100%",
-            overflowX: "auto",
-            overflowY: "hidden",
-            py: 2,
-          }}
-        >
+        <Box sx={{ width: "100%", overflowX: "auto", overflowY: "hidden", py: 2 }}>
           <DndContext onDragEnd={handleDragEnd}>
-            <SortableContext
-              items={msa.map((item) => item.id)}
-              strategy={verticalListSortingStrategy}
-            >
-              <Box
-                sx={{
-                  display: "flex",
-                  flexDirection: "column",
-                  width: "100%",
-                  gap: 3.5,
-                  py: 1,
-                }}
-              >
+            <SortableContext items={msa.map((item) => item.id)} strategy={verticalListSortingStrategy}>
+              <Box sx={{ display: "flex", flexDirection: "column", width: "100%", gap: 3.5, py: 1 }}>
                 {msa.map((row, rowIndex) => (
-                  <Box
-                    key={row.id}
-                    sx={{
-                      position: "relative",
-                      width: "fit-content", // important: match grid width so line aligns
-                    }}
-                  >
-                  <SortableRow
-                    key={row.id}
-                    row={row}
-                    labelWidth={labelWidth}
-                    columnTemplate={colTemplate}
-                    hasRowInfo={rowIndex > 0}
-                  >
-                    {row.sequence.map((subseq) => {
-                      const allGaps = subseq.sequence.every((it) => it.isGap);
+                  <Box key={row.id} sx={{ position: "relative", width: "fit-content" }}>
+                    <SortableRow
+                      key={row.id}
+                      row={row}
+                      labelWidth={labelWidth}
+                      columnTemplate={colTemplate}
+                      hasRowInfo={rowIndex > 0}
+                    >
+                      {row.sequence.map((subseq) => {
+                        const allGaps = subseq.sequence.every((it) => it.isGap);
 
-                      return (<Box
-                        key={subseq.id}
-                        sx={{
-                          display: "flex",
-                          flexDirection: "row",
-                          gridColumn: `span ${subseq.sequence.length}`,
-                          position: "relative",
-                          zIndex: 110,
-                          // keep the space, hide the whole subseq visually
-                          visibility: allGaps ? "hidden" : "visible",
-                          pointerEvents: allGaps ? "none" : "auto",
-
-                          // keep the same vertical footprint as normal subseqs
-                          minHeight: 24, // tweak if needed to match your chip row height
-                          "&::before": {
-                            content: '""',
-                            position: "absolute",
-                            left: 0,
-                            right: 0,
-                            top: -20,
-                            height: "32px",
-                            // borderTopRightRadius: "4px",
-                            // borderTopLeftRadius: "4px",
-                            borderRadius: "4px",
-                            backgroundColor: "divider",
-                            pointerEvents: "none",
-                            // also hide the divider when all gaps
-                            opacity: allGaps ? 0 : 1,
-                          },
-                        }}
-                      >
-                        <Typography
-                          variant="caption"
-                          sx={{
-                            position: "absolute",
-                            top: -20,
-                            left: 4,
-
-                            // ellipsis requirements
-                            maxWidth: `${subseq.sequence.length * motifWidth - 8}px`,
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-
-                            fontFamily: "monospace",
-                            fontSize: "0.65rem",
-                            color: "text.primary",
-                            pointerEvents: "none",
-                          }}
-                        >
-                          {subseq.name || subseq.id}
-                        </Typography>
-                        <Box sx={{ display: "flex", flexDirection: "row", gap: 1 }}>
-                        {subseq.sequence.map((item) =>
-                          item.isGap ? (
-                            <Box
-                              key={item.id}
+                        return (
+                          <Box
+                            key={subseq.id}
+                            sx={{
+                              display: "flex",
+                              flexDirection: "row",
+                              gridColumn: `span ${subseq.sequence.length}`,
+                              position: "relative",
+                              zIndex: 110,
+                              visibility: allGaps ? "hidden" : "visible",
+                              pointerEvents: allGaps ? "none" : "auto",
+                              minHeight: 24,
+                              "&::before": {
+                                content: '""',
+                                position: "absolute",
+                                left: 0,
+                                right: 0,
+                                top: -20,
+                                height: "32px",
+                                borderRadius: "4px",
+                                backgroundColor: "divider",
+                                pointerEvents: "none",
+                                opacity: allGaps ? 0 : 1,
+                              },
+                            }}
+                          >
+                            <Typography
+                              variant="caption"
                               sx={{
-                                m: 0,
-                                width: motifWidth,
-                                height: 20,
-                                backgroundColor: "transparent",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                // move up a bit
-                                mt: "2px",
-                                zIndex: 1000,
+                                position: "absolute",
+                                top: -20,
+                                left: 4,
+                                maxWidth: `${subseq.sequence.length * motifWidth - 8}px`,
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                fontFamily: "monospace",
+                                fontSize: "0.65rem",
+                                color: "text.primary",
+                                pointerEvents: "none",
                               }}
                             >
-                              <Box
-                                sx={{
-                                  width: Math.max(5, 3 * zoom),
-                                  height: Math.max(5, 3 * zoom),
-                                  borderRadius: "50%",
-                                  backgroundColor: "text.secondary",
-                                }}
-                              />
+                              {subseq.name || subseq.id}
+                            </Typography>
+
+                            <Box sx={{ display: "flex", flexDirection: "row", gap: 1 }}>
+                              {subseq.sequence.map((item) =>
+                                item.isGap ? (
+                                  <Box
+                                    key={item.id}
+                                    sx={{
+                                      m: 0,
+                                      width: motifWidth,
+                                      height: 20,
+                                      backgroundColor: "transparent",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      mt: "2px",
+                                      zIndex: 1000,
+                                    }}
+                                  >
+                                    <Box
+                                      sx={{
+                                        width: Math.max(5, 3 * zoom),
+                                        height: Math.max(5, 3 * zoom),
+                                        borderRadius: "50%",
+                                        backgroundColor: "text.secondary",
+                                      }}
+                                    />
+                                  </Box>
+                                ) : (
+                                  <Box
+                                    key={item.id}
+                                    component="span"
+                                    sx={{
+                                      backgroundColor: "background.paper",
+                                      borderRadius: "10px",
+                                      display: "inline-block",
+                                      zIndex: 99,
+                                    }}
+                                  >
+                                    <Tooltip
+                                      title={
+                                        <span>
+                                          Motif name is{" "}
+                                          {isPolyketideMotif(item.name)
+                                            ? renderChipLabel(item.name, toDisplayName)
+                                            : renderTooltipLabel(item.name, toDisplayName)}
+                                        </span>
+                                      }
+                                      arrow
+                                    >
+                                      <Chip
+                                        label={renderChipLabel(item.name, toDisplayName)}
+                                        size="small"
+                                        sx={{
+                                          borderRadius: "10px",
+                                          width: motifWidth,
+                                          height: 20,
+                                          textAlign: "center",
+                                          backgroundColor: getMotifColor(item.name || "") || "background.paper",
+                                          border: "1px solid",
+                                          borderColor: getMotifColor(item.name || "") || "primary.main",
+                                          zIndex: 100,
+                                          fontSize: `${Math.max(0.5, Math.min(1.0, zoom)) * 0.75}rem`,
+                                          transition: "background-color 0s ease-in-out",
+                                          mt: "-2px",
+                                        }}
+                                      />
+                                    </Tooltip>
+                                  </Box>
+                                )
+                              )}
                             </Box>
-                          ) : (
-                            <Box
-                              key={item.id}
-                              component="span"
-                              sx={{
-                                backgroundColor: "background.paper",
-                                borderRadius: "10px",
-                                display: "inline-block",
-                                zIndex: 99,
-                              }}
-                            >
-                              <Tooltip
-                                title={
-                                  <span>
-                                    Motif name is{" "}
-                                    {isPolyketideMotif(item.name)
-                                      ? renderChipLabel(item.name, toDisplayName)
-                                      : renderTooltipLabel(item.name, toDisplayName)}
-                                  </span>
-                                }
-                                arrow
-                              >
-                                <Chip
-                                  label={renderChipLabel(item.name, toDisplayName)}
-                                  size="small"
-                                  sx={{
-                                    borderRadius: "10px",
-                                    width: motifWidth,
-                                    height: 20,
-                                    textAlign: "center",
-                                    backgroundColor:
-                                      getMotifColor(item.name || "") || "background.paper",
-                                    border: "1px solid",
-                                    borderColor:
-                                      getMotifColor(item.name || "") || "primary.main",
-                                    zIndex: 100,
-                                    fontSize: `${Math.max(0.5, Math.min(1.0, zoom)) * 0.75}rem`,
-                                    transition: "background-color 0s ease-in-out",
-                                    // move up a bit
-                                    mt: "-2px",
-                                  }}
-                                />
-                              </Tooltip>
-                            </Box>
-                          )
-                        )}
-                        </Box>
-                      </Box>
-                    )})}
-                  </SortableRow>
+                          </Box>
+                        );
+                      })}
+                    </SortableRow>
                   </Box>
                 ))}
               </Box>

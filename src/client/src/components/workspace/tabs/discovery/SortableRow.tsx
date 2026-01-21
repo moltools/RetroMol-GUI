@@ -7,7 +7,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useSortable } from "@dnd-kit/sortable";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import InfoOutlineIcon from "@mui/icons-material/InfoOutline";
-import { MsaRow } from "./QueryResultView";
+import { MsaRow } from "./types";
 import { DialogRowInfo } from "./DialogRowInfo";
 
 interface SortableRowProps {
