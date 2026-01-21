@@ -20,6 +20,7 @@ from routes.compound import blp_search_compound, blp_submit_compound
 from routes.cluster import blp_submit_cluster
 from routes.query_service import blp_query_item
 from routes.info import blp_item_info
+from routes.drawing import blp_draw_item
 from routes.events import blp_events
 
 
@@ -157,4 +158,5 @@ app.register_blueprint(blp_submit_compound)
 app.register_blueprint(blp_submit_cluster)
 app.register_blueprint(blp_query_item)
 app.register_blueprint(blp_item_info)
+app.register_blueprint(blp_draw_item)
 app.register_blueprint(blp_events)

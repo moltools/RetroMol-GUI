@@ -10,6 +10,7 @@ import RefreshIcon from "@mui/icons-material/Refresh";
 import DownloadIcon from "@mui/icons-material/Download";
 import ExchangeIcon from "@mui/icons-material/SwapHoriz";
 import { SortableRow } from "./SortableRow";
+import { useNotifications } from "../../NotificationProvider";
 
 // Imports for dragging and dropping rows and motifs
 import { DndContext, DragEndEvent } from "@dnd-kit/core";
@@ -243,7 +244,72 @@ const renderTooltipLabel = (
   return renderChiralSuperscripts(raw || "Unknown motif");
 };
 
+const escapeSvgText = (value: string) => 
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+const toHex = (v: number) => v.toString(16).padStart(2, "0");
+
+const hslToRgb = (h: number, s: number, l: number) => {
+  // h: 0–360, s/l: 0–1
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+  const pick = (hp: number) =>
+    hp < 60 ? [c, x, 0] :
+    hp < 120 ? [x, c, 0] :
+    hp < 180 ? [0, c, x] :
+    hp < 240 ? [0, x, c] :
+    hp < 300 ? [x, 0, c] :
+    [c, 0, x];
+  const [r1, g1, b1] = pick(h);
+  return [
+    Math.round((r1 + m) * 255),
+    Math.round((g1 + m) * 255),
+    Math.round((b1 + m) * 255),
+  ];
+};
+
+const normalizeColor = (raw: string | undefined | null) => {
+  if (!raw) return "#f5f5f5";
+  const c = raw.trim();
+
+  // Already hex (#rgb, #rrggbb, #rrggbbaa)
+  if (/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(c)) return c;
+
+  // rgba()/rgb()
+  const rgba = c.match(/^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(?:\s*,\s*([\d.]+))?\s*\)$/i);
+  if (rgba) {
+    const [r, g, b, aRaw] = rgba.slice(1).map(Number);
+    const a = isNaN(aRaw) ? 1 : Math.max(0, Math.min(1, aRaw));
+    // composite over white to avoid transparency issues
+    const blend = (v: number) => Math.round((1 - a) * 255 + a * v);
+    return `#${toHex(blend(r))}${toHex(blend(g))}${toHex(blend(b))}`;
+  }
+
+  // hsla()/hsl()
+  const hsla = c.match(/^hsla?\(\s*([\d.]+)(?:deg)?\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%(?:\s*,\s*([\d.]+))?\s*\)$/i);
+  if (hsla) {
+    const h = Number(hsla[1]);
+    const s = Number(hsla[2]) / 100;
+    const l = Number(hsla[3]) / 100;
+    const a = hsla[4] === undefined ? 1 : Math.max(0, Math.min(1, Number(hsla[4])));
+    const [r, g, b] = hslToRgb(h, s, l);
+    const blend = (v: number) => Math.round((1 - a) * 255 + a * v);
+    return `#${toHex(blend(r))}${toHex(blend(g))}${toHex(blend(b))}`;
+  }
+
+  // Fallback
+  return "#f5f5f5";
+};
+
 export const QueryResultView: React.FC<QueryResultViewProps> = ({ result }) => {
+  const { pushNotification } = useNotifications();
+
   // Keep order locally
   const [msa, setMsa] = React.useState<MsaRow[]>(result.msa);
 
@@ -333,6 +399,210 @@ export const QueryResultView: React.FC<QueryResultViewProps> = ({ result }) => {
     });
   }, []);
 
+  const svgMotifLabel = (rawName: string | null, toDisplayName: (name: string | null) => string | null) => {
+    const raw = (rawName || "").trim();
+    if (!raw) return { isRich: false as const, text: "UNK" };
+
+    if (isPolyketideMotif(raw)) {
+      // Keep raw and render ^R/^S as superscripts via tspans
+      const parts = raw.split(/(\^[RS])/g).filter(Boolean);
+      return { isRich: true as const, parts }; // parts includes "^R" tokens
+    }
+
+    return { isRich: false as const, text: toDisplayName(raw) || "X" };
+  };
+
+  const renderSvgTspansForPolyketide = (parts: string[]) => {
+    // ^R/^S as superscripts
+    return parts
+      .map((p) => {
+        if (p === "^R" || p === "^S") {
+          const v = escapeSvgText(p.slice(1));
+          return `<tspan baseline-shift="super" font-size="5.2">${v}</tspan>`;
+        }
+        return `<tspan>${escapeSvgText(p)}</tspan>`;
+      })
+      .join("");
+  };
+
+  const buildMsaSvg = () => {
+    const motifPx = 19.1955;
+    const rowChipH = 13.8131;
+
+    const rowGap = 5;
+    const subHeaderH = 8;
+    const rowBlockH = subHeaderH + rowChipH;
+
+    const padding = 12;
+
+    const labelW = 120;
+    const scoreW = 42;
+    const leftW = labelW + scoreW;
+  
+    const svgWidth = padding * 2 + leftW + motifPx * msaLength;
+    const svgHeight = padding * 2 + msa.length * rowBlockH + Math.max(0, msa.length - 1) * rowGap;
+
+    const lineSpan = Math.max(0, msaLength - 1) * motifPx;
+
+    const fmt = (v: number | null, digits: number) =>
+      v == null || Number.isNaN(v) ? "" : v.toFixed(digits);
+
+    const rowsSvg = msa
+    .map((row, rIdx) => {
+      const yTop = padding + rIdx * (rowBlockH + rowGap); // includes rowGap
+      const yHeader = yTop;                               // subseq header band
+      const yChips = yTop + subHeaderH;                   // motif chips
+
+      const rowName = escapeSvgText(row.name || row.id || "row");
+
+      const alignText = escapeSvgText(fmt(row.alignment_score, 2));
+      const cosineText = escapeSvgText(fmt(row.cosine_score, 2));
+      const matchText = escapeSvgText(fmt(row.match_score, 2));
+
+      const xLeft = padding;
+      const xName = xLeft + 6;
+      const xScoresRight = xLeft + leftW - 6;
+
+      const xMotifs = xLeft + leftW;
+
+      const lineY = yChips + rowChipH / 2;
+      const lineX1 = xMotifs;
+      const lineX2 = xMotifs + lineSpan + motifPx;
+
+      // --- build motif cells AND subseq header outlines ---
+      let col = 0;
+
+      const subseqHeaders = row.sequence.map((subseq) => {
+        const startCol = col;
+        const len = subseq.sequence.length;
+        col += len;
+
+        const allGaps = subseq.sequence.every((it) => it.isGap);
+        if (allGaps) return "";
+
+        const x = xMotifs + startCol * motifPx;
+        const w = len * motifPx;
+        const title = escapeSvgText(subseq.name || subseq.id || "");
+          
+        const h = subHeaderH + (rowChipH / 2);
+        const r = 4;
+
+        const headerPath = `
+          M ${x} ${yHeader + h}
+          L ${x} ${yHeader + r}
+          Q ${x} ${yHeader} ${x + r} ${yHeader}
+          L ${x + w - r} ${yHeader}
+          Q ${x + w} ${yHeader} ${x + w} ${yHeader + r}
+          L ${x + w} ${yHeader + h}
+          L ${x} ${yHeader + h}
+        `;
+
+        return `
+          <g>
+            <path
+              d="${headerPath}"
+              fill="#e0e0e0"
+              stroke="#bdbdbd"
+              stroke-width="0.8"
+            />
+            <text x="${x + 3}" y="${yHeader + (subHeaderH / 2) + 1}"
+              font-family="Helvetica" font-size="4" fill="#111"
+              dominant-baseline="middle">${title}</text>
+          </g>
+        `;
+      }).join("");
+
+      // reset col for actual motif cell generation
+      col = 0;
+
+      const cells = row.sequence.flatMap((subseq) =>
+        subseq.sequence.map((motif) => {
+          const x = xMotifs + col * motifPx;
+          col += 1;
+
+          if (motif.isGap) {
+            return "";
+          }
+
+          const fill = normalizeColor(getMotifColor(motif.name || "") || "#ffffff");
+          const label = svgMotifLabel(motif.name, toDisplayName);
+          
+          // lower text so it is vertically centered within the chip
+          const paddingText = 3;
+
+          return `
+            <g>
+              <rect x="${x}" y="${yChips}" width="${motifPx}" height="${rowChipH}"
+                rx="4" ry="4" fill="${fill}" stroke="#000000" stroke-width="0.9" />
+              <text x="${x + motifPx / 2}" y="${yChips + rowChipH / 2 + paddingText}"
+                font-family="Helvetica" font-size="7.2" font-weight="600" fill="#000"
+                dominant-baseline="middle" text-anchor="middle">
+                ${
+                  label.isRich
+                    ? renderSvgTspansForPolyketide(label.parts)
+                    : escapeSvgText(label.text)
+                }
+              </text>
+            </g>
+          `;
+        })
+      ).join("");
+
+      return `
+        <g>
+          <!-- left label area -->
+          <text x="${xName}" y="${yChips + rowChipH / 2 + 0.8}"
+            font-family="Helvetica" font-size="8.2" font-weight="600"
+            dominant-baseline="middle">${rowName}</text>
+
+          <!-- scores (3 stacked) -->
+          <text x="${xScoresRight}" y="${yChips + 3.5}"
+            font-family="monospace" font-size="7.0" fill="#111"
+            text-anchor="end">${alignText}</text>
+          <text x="${xScoresRight}" y="${yChips + 9.0}"
+            font-family="monospace" font-size="7.0" fill="#111"
+            text-anchor="end">${cosineText}</text>
+          <text x="${xScoresRight}" y="${yChips + 14.5}"
+            font-family="monospace" font-size="7.0" fill="#111"
+            text-anchor="end">${matchText}</text>
+
+          ${lineSpan > 0 ? `<line x1="${lineX1}" x2="${lineX2}" y1="${lineY}" y2="${lineY}"
+            stroke="#9e9e9e" stroke-width="0.9" />` : ""}
+
+          <!-- subseq header outlines -->
+          ${subseqHeaders}
+
+          <!-- motif cells -->
+          ${cells}
+        </g>
+      `;
+    })
+    .join("");
+
+    return `
+      <svg xmlns="http://www.w3.org/2000/svg" width="${svgWidth}" height="${svgHeight}">
+        <rect x="0" y="0" width="${svgWidth}" height="${svgHeight}" fill="#ffffff"/>
+        ${rowsSvg}
+      </svg>`;
+  };
+
+  const handleDownloadMsaSvg = () => {
+    const svg = buildMsaSvg();
+    if (!svg) {
+      pushNotification("No visible sequences to download.", "warning");
+      return;
+    };
+    const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "msa.svg";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div>
       <Typography component="h1" variant="subtitle1">
@@ -355,7 +625,7 @@ export const QueryResultView: React.FC<QueryResultViewProps> = ({ result }) => {
           <Tooltip title="Zoom MSA in" arrow><ZoomInIcon onClick={handleZoomIn} sx={{ cursor: "pointer" }} /></Tooltip>
           <Tooltip title="Reset zoom" arrow><RefreshIcon onClick={handleZoomReset} sx={{ cursor: "pointer" }} /></Tooltip>
           <Tooltip title="Invert order of motifs" arrow><ExchangeIcon onClick={invertMsaMotifOrder} sx={{ cursor: "pointer" }} /></Tooltip>
-          <Tooltip title="Download as SVG" arrow><DownloadIcon onClick={() => {}} sx={{ cursor: "not-allowed" }} /></Tooltip>
+          <Tooltip title="Download as SVG" arrow><DownloadIcon onClick={handleDownloadMsaSvg} sx={{ cursor: "pointer" }} /></Tooltip>
         </Box>
       </Box>
 

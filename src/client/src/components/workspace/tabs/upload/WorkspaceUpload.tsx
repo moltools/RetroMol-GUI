@@ -196,11 +196,6 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
     setOpenClusters(true);
   };
 
-  const handleViewItem = (itemId: string) => {
-    // event.currentTarget.blur(); // prevents 'Blocked aria-hidden on an element' warning
-    console.log("dialog for viewing item not implemented yet:", itemId);
-  };
-
   // Import compound handlers
   const handleImportSingleCompound = async({ name, smiles, matchStereochemistry}: { name: string; smiles: string; matchStereochemistry: boolean }) => {
     await importCompound(deps, { name, smiles, matchStereochemistry });
@@ -387,12 +382,12 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
               {session.items.map((item) => (
                 <WorkspaceItemCard
                   key={item.id}
+                  sessionId={session.sessionId}
                   item={item}
                   selected={selectedIds.has(item.id)}
                   disabled={deletingIds.has(item.id)}
                   onToggleSelect={toggleSelectItem}
                   onDelete={handleDeleteItem}
-                  onView={handleViewItem}
                 />
               ))}
             </Stack>
