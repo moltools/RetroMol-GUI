@@ -160,11 +160,11 @@ export const DialogRowInfo: React.FC<DialogRowInfoProps> = ({
         { label: "Close", variant: "text", color: "inherit", onClick: onClose },
       ]}
     >
-      {!canFetch || (!data?.annotations.length && !data?.references.length) && (
+      {(!canFetch || (!data?.annotations.length && !data?.references.length)) ? (
         <Typography variant="body2">
           No additional information available for this row.
         </Typography>
-      )}
+      ) : null}
 
       {data?.references.length ? (
         <>
