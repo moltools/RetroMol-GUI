@@ -286,9 +286,19 @@ export const WorkspaceUpload: React.FC<WorkspaceUploadProps> = ({ session, setSe
               color={(theme.vars || theme).palette.primary.main}
               sx={{ fontWeight: "500" }}
             >
-              Discovery tab
+              Discovery
             </MuiLink>
-            . A maximum of <b>{MAX_ITEMS} items</b> can be imported into the workspace. Keep an eye on <NotificationsRoundedIcon fontSize={'small'} sx={{ verticalAlign: 'middle' }} /> for updates on your queries.
+            &nbsp;and&nbsp;
+            <MuiLink
+              component={RouterLink}
+              to="/dashboard/enrichment"
+              underline="hover"
+              color={(theme.vars || theme).palette.primary.main}
+              sx={{ fontWeight: "500" }}
+            >
+              Enrichment
+            </MuiLink>
+            &nbsp;tabs. A maximum of <b>{MAX_ITEMS} items</b> can be imported into the workspace. Keep an eye on <NotificationsRoundedIcon fontSize={'small'} sx={{ verticalAlign: 'middle' }} /> for updates on your queries.
           </Typography>
 
           <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
