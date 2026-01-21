@@ -173,7 +173,7 @@ export const buildMsaSvg = ({ msa, msaLength, toDisplayName }: BuildSvgArgs) => 
 
       return `
         <g>
-          <text x="${xName}" y="${yChips + rowChipH / 2 + 0.8}"
+          <text x="${xName}" y="${yChips + rowChipH / 2 + 3}"
             font-family="Helvetica" font-size="8.2" font-weight="600"
             dominant-baseline="middle">${rowName}</text>
 
