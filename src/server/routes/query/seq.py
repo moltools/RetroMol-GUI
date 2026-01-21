@@ -220,11 +220,14 @@ class SequenceItemReadout:
     :var kind: either "compound" or "cluster"
     :var block_ids: list of block identifiers for display purposes
     :var blocks: list of blocks, where each block is a list of SequenceItems
+    :var db_id: database identifier, if applicable
     """
 
     kind: Literal["compound", "cluster"]
     block_ids: list[str]  # only for display purposes
     blocks: list[list[SequenceItem]]
+
+    db_id: int | None
 
     def flatten_items(self) -> list[SequenceItem]:
         """

@@ -30,6 +30,9 @@ export const WorkspaceDiscovery: React.FC<WorkspaceDiscoveryProps> = ({ session,
   const theme = useTheme();
   const { pushNotification } = useNotifications();
 
+  // Check if session has items
+  const hasItems = session.items.length > 0;
+
   // Query state
   const [selectedItemId, setSelectedItemId] = React.useState<string>("");
   const [queryLoading, setQueryLoading] = React.useState(false);
@@ -143,7 +146,7 @@ export const WorkspaceDiscovery: React.FC<WorkspaceDiscoveryProps> = ({ session,
           </Typography>
 
           <Stack direction="column" spacing={2} sx={{ mt: 3 }}>
-            <FormControl fullWidth size="small">
+            <FormControl fullWidth size="small" disabled={!hasItems || queryLoading}>
               <InputLabel 
                 id="item-select-label"
                 sx={{
@@ -155,14 +158,18 @@ export const WorkspaceDiscovery: React.FC<WorkspaceDiscoveryProps> = ({ session,
                     "&.MuiInputLabel-shrink": { transform: "translate(14px, -9px) scale(0.75)" },
                 }}
               >
-                {selectedItemId ? "Item to use for querying" : "Select an item to use for querying"}
+                {!hasItems
+                  ? "No items available to select"
+                  : selectedItemId
+                    ? "Item to use for querying"
+                    : "Select an item to use for querying"}
               </InputLabel>
               <Select
                 labelId="item-select-label"
                 label="Item to use for querying"
                 value={selectedItemId}
                 onChange={(e) => setSelectedItemId(e.target.value)}
-                disabled={queryLoading}
+                disabled={!hasItems || queryLoading}
                 MenuProps={{
                   PaperProps: {
                     sx: {

@@ -10,7 +10,6 @@ import Typography from "@mui/material/Typography";
 import Autocomplete from "@mui/material/Autocomplete";
 import { useNotifications } from "../../NotificationProvider";
 import { DialogWindow } from "../../../shared/DialogWindow";
-import { o } from "framer-motion/dist/types.d-DagZKalS";
 
 type CompoundOption = {
   name: string;

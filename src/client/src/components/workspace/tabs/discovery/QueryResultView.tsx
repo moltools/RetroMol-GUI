@@ -32,24 +32,19 @@ export type Sequence = {
   sequence: SequenceItem[];
 };
 
-export type Reference = {
-  name: string;
-  database_name: string;
-  database_identifier: string;
-};
-
-export type MsaItem = {
+export type MsaRow= {
   id: string;
   name?: string;
+  kind?: "compound" | "cluster" | null;
+  db_id?: number | null;
   alignment_score: number | null;
   cosine_score: number | null;
   match_score: number | null;
   sequence: Sequence[];
-  references: Reference[];
 };
 
 export type QueryResult = {
-  msa: MsaItem[];
+  msa: MsaRow[];
 };
 
 type QueryResultViewProps = {
@@ -250,7 +245,7 @@ const renderTooltipLabel = (
 
 export const QueryResultView: React.FC<QueryResultViewProps> = ({ result }) => {
   // Keep order locally
-  const [msa, setMsa] = React.useState<MsaItem[]>(result.msa);
+  const [msa, setMsa] = React.useState<MsaRow[]>(result.msa);
 
   // Invert order of motifs in msa
   const invertMsaMotifOrder = () => {
@@ -387,7 +382,7 @@ export const QueryResultView: React.FC<QueryResultViewProps> = ({ result }) => {
                   py: 1,
                 }}
               >
-                {msa.map((row) => (
+                {msa.map((row, rowIndex) => (
                   <Box
                     key={row.id}
                     sx={{
@@ -400,6 +395,7 @@ export const QueryResultView: React.FC<QueryResultViewProps> = ({ result }) => {
                     row={row}
                     labelWidth={labelWidth}
                     columnTemplate={colTemplate}
+                    hasRowInfo={rowIndex > 0}
                   >
                     {row.sequence.map((subseq) => {
                       const allGaps = subseq.sequence.every((it) => it.isGap);

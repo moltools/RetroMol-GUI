@@ -1,7 +1,7 @@
 """Module for aligning sequence items and creating MSA."""
 
 from dataclasses import dataclass, field, asdict
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 from retromol.chem.fingerprint import calculate_tanimoto_similarity
 
@@ -77,50 +77,14 @@ class MSASequenceBlock:
 
 
 @dataclass(frozen=True)
-class RowReference:
-    """
-    Reference to the original database entry for a given MSA row.
-
-    :var name: name of the entry
-    :var database_name: name of the database
-    :var database_identifier: unique identifier in the database
-    """
-
-    name: str
-    database_name: str
-    database_identifier: str
-
-    def to_dict(self) -> dict[str, Any]:
-        """
-        Convert the RowReference to a dictionary.
-
-        :return: a dictionary representation of the RowReference
-        """
-        return asdict(self)
-    
-    @classmethod
-    def from_reference(cls, reference: Reference) -> "RowReference":
-        """
-        Create a RowReference from a Reference object.
-
-        :param reference: Reference object
-        :return: constructed RowReference
-        """
-        return cls(
-            name=reference.name,
-            database_name=reference.database_name,
-            database_identifier=reference.database_identifier,
-        )
-
-
-@dataclass(frozen=True)
 class MSARow:
     """
     One row in the MSA: Query or a retrieved result.
 
     :var name: name of the row
+    :var kind: "compound" or "cluster"
+    :var db_id: database ID of the item
     :var sequence: list of MSASequenceBlocks in the row
-    :var references: list of RowReferences for this row
     :var alignment_score: optional alignment score
     :var cosine_score: optional cosine similarity score
     :var match_score: ratio of items aligned against target
@@ -129,8 +93,9 @@ class MSARow:
 
     name: str
     sequence: list[MSASequenceBlock] = field(default_factory=list)
-    references: list[RowReference] = field(default_factory=list)
 
+    kind: Literal["compound", "cluster"] | None = None
+    db_id: int | None = None
     alignment_score: float | None = None
     cosine_score: float | None = None
     match_score: float | None = None
@@ -144,8 +109,9 @@ class MSARow:
         """
         return {
             "name": self.name,
+            "kind": self.kind,
+            "db_id": self.db_id,
             "sequence": [block.to_dict() for block in self.sequence],
-            "references": [ref.to_dict() for ref in self.references],
             "alignment_score": self.alignment_score,
             "cosine_score": self.cosine_score,
             "match_score": self.match_score,
@@ -274,11 +240,12 @@ class MSAResult:
 
         query_row = MSARow(
             name="Query",
+            kind=None,
+            db_id=None,
             alignment_score=None,
             cosine_score=None,
             match_score=None,
             sequence=query_blocks,
-            references=[],
         )
         result.msa.append(query_row)
 
@@ -348,7 +315,6 @@ class MSAResult:
             with SessionLocal() as session:
                 item_type = Compound if isinstance(item, Compound) else CandidateCluster
                 refs = get_references(session, item_type, item.id)
-                refs = [RowReference.from_reference(r) for r in refs]
 
             if refs:
                 name = refs[0].name
@@ -360,11 +326,12 @@ class MSAResult:
             
             result.msa.append(MSARow(
                 name=name,
+                kind=readout.kind,
+                db_id=readout.db_id,
                 alignment_score=retrieved_alignment_scores[ridx - 1],
                 cosine_score=retrieved_cosine_scores[ridx - 1],
                 match_score=retrieved_match_scores[ridx - 1],
                 sequence=blocks,
-                references=refs,
             ))
 
         return result

@@ -45,11 +45,17 @@ def calculate_payload_fingerprint(
     return fp
 
 
-def _format_readout_compound(payload: Result, fragment: bool = False) -> SequenceItemReadout:
+def _format_readout_compound(
+    payload: Result,
+    fragment: bool = False,
+    payload_db_id: int | None = None,
+) -> SequenceItemReadout:
     """
     Format the readout for a compound payload.
 
     :param payload: the compound payload object (Result)
+    :param fragment: whether to treat each node as a separate fragment
+    :param payload_db_id: optional database identifier for the payload
     :return: the formatted readout as a sequence of sequences of SequenceItem
     """
     linear_readouts: list[list[MolNode]] = payload.linear_readout.paths
@@ -65,16 +71,21 @@ def _format_readout_compound(payload: Result, fragment: bool = False) -> Sequenc
 
     return SequenceItemReadout(
         kind="compound",
+        db_id=payload_db_id,
         block_ids=[f"structural readout {i+1}" for i in range(len(formatted_blocks))],
         blocks=formatted_blocks,
     )
 
 
-def _format_readout_cluster(payload: LinearReadout) -> SequenceItemReadout:
+def _format_readout_cluster(
+    payload: LinearReadout,
+    payload_db_id: int | None = None,
+) -> SequenceItemReadout:
     """
     Format the readout for a cluster payload.
 
     :param payload: the cluster payload object (LinearReadout)
+    :param payload_db_id: optional database identifier for the payload
     :return: the formatted readout as a sequence of sequences of SequenceItem
     """
     block_ids = []
@@ -92,6 +103,7 @@ def _format_readout_cluster(payload: LinearReadout) -> SequenceItemReadout:
 
     return SequenceItemReadout(
         kind="cluster",
+        db_id=payload_db_id,
         block_ids=block_ids,
         blocks=formatted_blocks,
     )
@@ -100,12 +112,14 @@ def _format_readout_cluster(payload: LinearReadout) -> SequenceItemReadout:
 def format_payload_readout(
     payload_type: Literal["cluster", "compound"],
     payload: Result | LinearReadout,
+    payload_db_id: int | None = None,
 ) -> SequenceItemReadout:
     """
     Format the readout for the given payload based on its type.
 
     :param payload_type: the type of the payload ("cluster" or "compound")
     :param payload: the payload object (Result or LinearReadout)
+    :param payload_db_id: optional database identifier for the payload
     :return: the formatted readout as a sequence of sequences of SequenceItem
     :raises ValueError: if the payload_type is unsupported
     :raises AssertionError: if the payload type does not match the expected class
@@ -113,10 +127,10 @@ def format_payload_readout(
     match payload_type:
         case "cluster":
             assert isinstance(payload, LinearReadout), f"expected LinearReadout payload, got {type(payload)}"
-            query_seq = _format_readout_cluster(payload)
+            query_seq = _format_readout_cluster(payload, payload_db_id)
         case "compound":
             assert isinstance(payload, Result), f"expected Result payload, got {type(payload)}"
-            query_seq = _format_readout_compound(payload)
+            query_seq = _format_readout_compound(payload, fragment=False, payload_db_id=payload_db_id)
         case _:
             raise ValueError(f"unsupported payload_type: {payload_type}")
 

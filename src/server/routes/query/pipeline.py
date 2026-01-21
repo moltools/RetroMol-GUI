@@ -306,7 +306,14 @@ def cross_modal_retrieval(
         item_type = "cluster" if isinstance(item, CandidateCluster) else "compound"
         item_blob = item.biocracker if item_type == "cluster" else item.retromol
         item_payload = load_payload(item_type, item_blob)
-        item_readout = format_payload_readout(item_type, item_payload)
+
+        # Get item database ID if available
+        try:
+            item_db_id = item.id
+        except AttributeError:
+            item_db_id = None
+
+        item_readout = format_payload_readout(item_type, item_payload, item_db_id)
         nns_featurized.append(item_readout)
         nns_cosine_scores.append(1.0 - distance)
         retrieved_items.append(item)
