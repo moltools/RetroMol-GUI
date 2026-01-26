@@ -388,7 +388,7 @@ def item_compare_fn(a: SequenceItem, b:  SequenceItem) -> float:
         anc_tok_differs = a_anc_toks.symmetric_difference(b_anc_toks)
 
         tok_overlap = fam_tok_overlap.union(anc_tok_overlap)
-        score += 0.5 * len(tok_overlap)
+        score += 1.0 * len(tok_overlap)
 
         tok_differs = fam_tok_differs.union(anc_tok_differs)
         score -= 0.5 * len(tok_differs)
