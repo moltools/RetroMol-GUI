@@ -1,6 +1,7 @@
 """Pipeline for cross-modal retrieval."""
 
 import uuid
+import math
 from dataclasses import dataclass
 from typing import Any
 
@@ -50,7 +51,7 @@ def _slice_alignment_to_target_region(
     """
     Slice (center_aln, block_aln) down to the columns that map to target coordinates
     [start, end] inclusive, while keeping insertion columns (center token == gap_repr)
-    that occur while inside the region.
+    that occur while inside the region and immediately before the region start.
 
     :param center_aln: list of hashes representing the center alignment SequenceItems
     :param block_aln: list of hashes representing the block alignment SequenceItems
@@ -66,21 +67,21 @@ def _slice_alignment_to_target_region(
 
     target_pos = -1
     in_region = False
+    prefix_anchor = start - 1
 
     for c_tok, b_tok in zip(center_aln, block_aln):
         if c_tok != gap_repr:
             target_pos += 1
-            in_region = (start <= target_pos <= end)
-
-            if start <= target_pos <= end:
-                out_c.append(c_tok)
-                out_b.append(b_tok)
-
             if target_pos > end:
                 break
 
-        else:
+            in_region = (start <= target_pos <= end)
             if in_region:
+                out_c.append(c_tok)
+                out_b.append(b_tok)
+
+        else:
+            if in_region or target_pos == prefix_anchor:
                 out_c.append(c_tok)
                 out_b.append(b_tok)
 
@@ -267,11 +268,42 @@ def merge_dockings_into_global_alignment(
     return rows, block_maps
 
 
+def _cosine_similarity(a: list[float], b: list[float]) -> float:
+    """
+    Compute cosine similarity between two vectors.
+
+    :param a: first vector
+    :param b: second vector
+    :return: cosine similarity in [-1, 1]
+    """
+    if a is None or b is None:
+        return 0.0
+    try:
+        if len(a) == 0 or len(b) == 0:
+            return 0.0
+    except TypeError:
+        return 0.0
+    if len(a) != len(b):
+        current_app.logger.warning("cosine similarity length mismatch: %s vs %s", len(a), len(b))
+    dot = 0.0
+    norm_a = 0.0
+    norm_b = 0.0
+    for x, y in zip(a, b):
+        dot += x * y
+        norm_a += x * x
+        norm_b += y * y
+    if norm_a <= 0.0 or norm_b <= 0.0:
+        return 0.0
+    return dot / (math.sqrt(norm_a) * math.sqrt(norm_b))
+
+
 def cross_modal_retrieval(
     payload_type: str,
     payload_blob: dict[str, Any],
     query_against_clusters: bool,
     query_against_compounds: bool,
+    user_uploads: list[dict[str, Any]] | None = None,
+    query_name: str | None = None,
     top_k: int = 20,
 ) -> MSAResult:
     """
@@ -281,6 +313,8 @@ def cross_modal_retrieval(
     :param payload_blob: the actual payload data
     :param query_against_clusters: whether to query against clusters
     :param query_against_compounds: whether to query against compounds
+    :param user_uploads: optional list of session items to include in retrieval
+    :param query_name: optional display name for the query row
     :param top_k: number of top results to return
     :return: MSAResult containing the retrieval results
     :raises ValueError: if no nearest neighbors found or alignment fails
@@ -300,7 +334,8 @@ def cross_modal_retrieval(
     # Featurize nearest neighbors as SequenceItemReadout with cosine SCORE (1 - distance)
     nns_featurized: list[SequenceItemReadout] = []
     nns_cosine_scores: list[float] = []
-    retrieved_items: list[CandidateCluster | Compound] = []
+    retrieved_items: list[CandidateCluster | Compound | None] = []
+    retrieved_names: list[str | None] = []
     for item, distance in nns:
         assert isinstance(item, (CandidateCluster, Compound)), "expected item to be CandidateCluster or Compound"
         item_type = "cluster" if isinstance(item, CandidateCluster) else "compound"
@@ -317,6 +352,28 @@ def cross_modal_retrieval(
         nns_featurized.append(item_readout)
         nns_cosine_scores.append(1.0 - distance)
         retrieved_items.append(item)
+        retrieved_names.append(None)
+
+    # Include user uploads (session items) if provided
+    for upload in user_uploads or []:
+        if not isinstance(upload, dict):
+            continue
+        upload_kind = upload.get("kind")
+        upload_payload = upload.get("payload")
+        if upload_kind not in ("cluster", "compound"):
+            continue
+        if not upload_payload:
+            continue
+        try:
+            upload_vec, upload_readout = featurize_item(upload_kind, upload_payload)
+        except Exception as exc:
+            current_app.logger.warning("failed to featurize user upload: %s", exc)
+            continue
+        cosine_score = _cosine_similarity(query_vec, upload_vec)
+        nns_featurized.append(upload_readout)
+        nns_cosine_scores.append(cosine_score)
+        retrieved_items.append(None)
+        retrieved_names.append(upload.get("name") or "Uploaded item")
     
     if not nns_featurized or not query_blocks:
         raise ValueError("no nearest neighbors found or query blocks are empty")
@@ -334,6 +391,7 @@ def cross_modal_retrieval(
 
     top_k_nns_featurized    = [nns_featurized[i] for i in top_k_indices]
     top_k_retrieved_items   = [retrieved_items[i] for i in top_k_indices]
+    top_k_retrieved_names   = [retrieved_names[i] for i in top_k_indices]
     top_k_aln_results       = [aln_results[i] for i in top_k_indices]
     top_k_aln_scores        = [aln_scores[i] for i in top_k_indices]
     top_k_cosine_scores     = [nns_cosine_scores[i] for i in top_k_indices]
@@ -358,10 +416,12 @@ def cross_modal_retrieval(
         retrieved_alignment_scores=top_k_aln_scores,
         retrieved_cosine_scores=top_k_cosine_scores,
         retrieved_match_scores=top_k_match_scores,
+        retrieved_row_names=top_k_retrieved_names,
         label_fn=item_label_fn,
         gap_repr=Gap.alignment_representation(),
         display_name_unidentified=DISPLAY_NAME_UNIDENTIFIED,
         gap_display_name=Gap().display_name,
+        query_name=query_name,
     )
 
     return msa_result

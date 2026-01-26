@@ -43,6 +43,7 @@ export const WorkspaceDiscovery: React.FC<WorkspaceDiscoveryProps> = ({ session,
   // Query settings
   const [queryAgainstCompounds, setQueryAgainstCompounds] = React.useState(true);
   const [queryAgainstClusters, setQueryAgainstClusters] = React.useState(true);
+  const [queryAgainstUserUploads, setQueryAgainstUserUploads] = React.useState(false);
 
   // Wrap parent setter (Session | null) into the deps shape (Session-only functional updater)
   const setSessionSafe = React.useCallback(
@@ -134,7 +135,7 @@ export const WorkspaceDiscovery: React.FC<WorkspaceDiscoveryProps> = ({ session,
             >
               Upload tab
             </MuiLink>
-            &nbsp;for cross-modal retrieval against the BioNexus database.
+            &nbsp;for cross-modal retrieval against the BioNexus database or other items in your workspace.
           </Typography>
 
           <Stack direction="column" spacing={2} sx={{ mt: 3 }}>
@@ -198,7 +199,10 @@ export const WorkspaceDiscovery: React.FC<WorkspaceDiscoveryProps> = ({ session,
                   control={
                     <Checkbox
                       checked={queryAgainstClusters}
-                      disabled={queryLoading || (queryAgainstClusters && !queryAgainstCompounds && !queryAgainstUserUploads)}
+                      disabled={
+                        queryLoading ||
+                        (queryAgainstClusters && !queryAgainstCompounds && !queryAgainstUserUploads)
+                      }
                       onChange={(e) => setQueryAgainstClusters(e.target.checked)}
                     />
                   }
@@ -208,11 +212,27 @@ export const WorkspaceDiscovery: React.FC<WorkspaceDiscoveryProps> = ({ session,
                   control={
                     <Checkbox
                       checked={queryAgainstCompounds}
-                      disabled={queryLoading || (queryAgainstCompounds && !queryAgainstClusters && !queryAgainstUserUploads)}
+                      disabled={
+                        queryLoading ||
+                        (queryAgainstCompounds && !queryAgainstClusters && !queryAgainstUserUploads)
+                      }
                       onChange={(e) => setQueryAgainstCompounds(e.target.checked)}
                     />
                   }
                   label="Query against compounds"
+                />
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={queryAgainstUserUploads}
+                      disabled={
+                        queryLoading ||
+                        (queryAgainstUserUploads && !queryAgainstClusters && !queryAgainstCompounds)
+                      }
+                      onChange={(e) => setQueryAgainstUserUploads(e.target.checked)}
+                    />
+                  }
+                  label="Query against user uploads"
                 />
               </FormGroup>
             </Box>

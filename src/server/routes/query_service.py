@@ -2,7 +2,7 @@
 
 from flask import Blueprint, current_app, request, jsonify
 
-from routes.session_store import load_item
+from routes.session_store import load_item, load_session_with_items
 from routes.query.pipeline import cross_modal_retrieval
 from routes.query.enrichment import enrichment_study
 from routes.query.align import MSAResult
@@ -25,10 +25,14 @@ def query_item():
     
     query_against_clusters = request.args.get("queryAgainstClusters", "true").lower() == "true"
     query_against_compounds = request.args.get("queryAgainstCompounds", "true").lower() == "true"
+    query_against_user_uploads = request.args.get("queryAgainstUserUploads", "false").lower() == "true"
     current_app.logger.debug(f"query_against_compounds: {query_against_compounds}")
     current_app.logger.debug(f"query_against_clusters: {query_against_clusters}")
-    if not query_against_clusters and not query_against_compounds:
-        return jsonify({"error": "At least one of queryAgainstClusters or queryAgainstCompounds must be true"}), 400
+    current_app.logger.debug(f"query_against_user_uploads: {query_against_user_uploads}")
+    if not query_against_clusters and not query_against_compounds and not query_against_user_uploads:
+        return jsonify({
+            "error": "At least one of queryAgainstClusters, queryAgainstCompounds, or queryAgainstUserUploads must be true"
+        }), 400
     
     # Retrieve item from session store
     current_app.logger.info(f"Retrieving query item: session_id={session_id} item_id={item_id}")
@@ -46,6 +50,22 @@ def query_item():
         current_app.logger.error("Missing item payload for querying")
         return jsonify({"error": "Missing item payload"}), 400
     
+    user_uploads: list[dict] = []
+    if query_against_user_uploads:
+        session_blob = load_session_with_items(session_id)
+        for candidate in (session_blob or {}).get("items", []) or []:
+            if not isinstance(candidate, dict):
+                continue
+            if candidate.get("id") == item_id:
+                continue
+            if candidate.get("status") != "done":
+                continue
+            if candidate.get("kind") not in ("cluster", "compound"):
+                continue
+            if not candidate.get("payload"):
+                continue
+            user_uploads.append(candidate)
+
     try:
         current_app.logger.info(f"Starting cross-modal retrieval for item_id={item_id}")
         msa_result: MSAResult = cross_modal_retrieval(
@@ -53,6 +73,8 @@ def query_item():
             payload_blob=payload_blob,
             query_against_clusters=query_against_clusters,
             query_against_compounds=query_against_compounds,
+            user_uploads=user_uploads,
+            query_name=item.get("name"),
         )
     except ValueError as e:
         current_app.logger.error(f"Error during cross-modal retrieval: {e}")

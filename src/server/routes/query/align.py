@@ -87,7 +87,7 @@ class MSARow:
     :var sequence: list of MSASequenceBlocks in the row
     :var alignment_score: optional alignment score
     :var cosine_score: optional cosine similarity score
-    :var match_score: ratio of items aligned against target
+    :var match_score: ratio of item tokens visible in the alignment
     :var id: unique identifier
     """
 
@@ -146,7 +146,7 @@ class MSAResult:
         # rows[0] is query_readout, rows[1:] correspond to retrieved_readouts
         query_readout: SequenceItemReadout,
         retrieved_readouts: list[SequenceItemReadout],
-        retrieved_items: list[Compound | CandidateCluster],
+        retrieved_items: list[Compound | CandidateCluster | None],
         retrieved_alignment_scores: list[float],
         retrieved_cosine_scores: list[float],
         retrieved_match_scores: list[float],
@@ -155,6 +155,8 @@ class MSAResult:
         gap_repr: str,
         display_name_unidentified: str,
         gap_display_name: str,
+        retrieved_row_names: list[str | None] | None = None,
+        query_name: str | None = None,
     ) -> "MSAResult":
         """
         Create an MSAResult from alignment data.
@@ -163,7 +165,7 @@ class MSAResult:
         :param block_maps: per-row ownership of each global col -> block_idx or None
         :param query_readout: SequenceItemReadout for the query row
         :param retrieved_readouts: list of SequenceItemReadouts for retrieved rows
-        :param retrieved_items: list of retrieved Compound or CandidateCluster items
+        :param retrieved_items: list of retrieved items (db models or None for uploads)
         :param retrieved_alignment_scores: list of alignment scores for retrieved rows
         :param retrieved_cosine_scores: list of cosine similarity scores for retrieved rows
         :param retrieved_match_scores: list of match scores for retrieved rows
@@ -171,6 +173,8 @@ class MSAResult:
         :param gap_repr: string representation used for gaps in the alignment
         :param display_name_unidentified: display name for unidentified items
         :param gap_display_name: display name for gaps
+        :param retrieved_row_names: optional list of display names for retrieved rows
+        :param query_name: optional display name for the query row
         :return: constructed MSAResult
         """
         if not rows:
@@ -238,8 +242,9 @@ class MSAResult:
                 sequence=current_tokens,
             ))
 
+        display_query_name = (query_name or "").strip()
         query_row = MSARow(
-            name="Query",
+            name=f"Query: {display_query_name}" if display_query_name else "Query",
             kind=None,
             db_id=None,
             alignment_score=None,
@@ -267,6 +272,9 @@ class MSAResult:
         
         if len(retrieved_match_scores) != len(rows) - 1:
             raise ValueError("retrieved_match_scores/rows length mismatch")
+
+        if retrieved_row_names is not None and len(retrieved_row_names) != len(rows) - 1:
+            raise ValueError("retrieved_row_names/rows length mismatch")
         
         for ridx in range(1, len(rows)):
             row_tokens = rows[ridx]
@@ -311,21 +319,29 @@ class MSAResult:
                     sequence=current_tokens,
                 ))
 
-            # Retrieve references
-            with SessionLocal() as session:
-                item_type = Compound if isinstance(item, Compound) else CandidateCluster
-                refs = get_references(session, item_type, item.id)
+            row_name = None
+            if retrieved_row_names is not None:
+                row_name = retrieved_row_names[ridx - 1]
 
-            if refs:
-                name = refs[0].name
-            else:
-                if isinstance(item, Compound):
-                    name = f"Compound {item.id}"
+            if row_name is None and item is not None:
+                # Retrieve references
+                with SessionLocal() as session:
+                    item_type = Compound if isinstance(item, Compound) else CandidateCluster
+                    refs = get_references(session, item_type, item.id)
+
+                if refs:
+                    row_name = refs[0].name
                 else:
-                    name = f"Cluster {item.file_name}"
+                    if isinstance(item, Compound):
+                        row_name = f"Compound {item.id}"
+                    else:
+                        row_name = f"Cluster {item.file_name}"
+
+            if row_name is None:
+                row_name = "Uploaded item"
             
             result.msa.append(MSARow(
-                name=name,
+                name=row_name,
                 kind=readout.kind,
                 db_id=readout.db_id,
                 alignment_score=retrieved_alignment_scores[ridx - 1],
@@ -459,6 +475,8 @@ def score_by_alignment(
     aln_scores: list[float] = []
     match_scores: list[float] = []
 
+    gap_repr = Gap.alignment_representation()
+
     for item in items:
         aligner = _setup_aligner(query, item)
         
@@ -466,15 +484,15 @@ def score_by_alignment(
             aligner=aligner,
             target=query.flatten_items(),
             candidates=item.blocks,
-            gap_repr=Gap.alignment_representation(),
+            gap_repr=gap_repr,
             mask_repr=Mask.alignment_representation(),
             allow_block_reverse=True,
         )
 
         # Get full length of item
         cum_len = len(item.flatten_items())
-        aligned_items = cum_len - sum(len(item.blocks[block_idx]) for block_idx in aln.unused_blocks)
-        match_score = aligned_items / cum_len if cum_len > 0 else 0.0
+        visible_items = _count_visible_tokens_in_docking(aln, gap_repr)
+        match_score = visible_items / cum_len if cum_len > 0 else 0.0
     
         # Penalize unaligned regions
         unaligned_items = 0
@@ -491,3 +509,61 @@ def score_by_alignment(
         match_scores.append(match_score)
 
     return aln_results, aln_scores, match_scores
+
+
+def _count_visible_tokens_in_docking(docking: DockingResult, gap_repr: str) -> int:
+    """
+    Count item tokens that will be visible in the alignment for a docking result.
+
+    This mirrors the region slicing logic used in the MSA merge and respects
+    collision resolution within a single row (max score wins on target columns).
+    """
+    visible = 0
+    placements = sorted(docking.placements, key=lambda p: (p.start, p.end))
+
+    # Count insertion tokens (unique columns, so no collision handling needed).
+    for placement in placements:
+        target_pos = -1
+        in_region = False
+        prefix_anchor = placement.start - 1
+
+        for c_tok, b_tok in zip(placement.center_aln, placement.block_aln):
+            if c_tok != gap_repr:
+                target_pos += 1
+                if target_pos > placement.end:
+                    break
+                in_region = placement.start <= target_pos <= placement.end
+            else:
+                if (in_region or target_pos == prefix_anchor) and b_tok != gap_repr:
+                    visible += 1
+
+    # Count target-column tokens with collision handling (max score wins).
+    score_by_pos: dict[int, float] = {}
+    has_token_by_pos: dict[int, bool] = {}
+
+    for placement in placements:
+        target_pos = -1
+        in_region = False
+        score = float(placement.score)
+
+        for c_tok, b_tok in zip(placement.center_aln, placement.block_aln):
+            if c_tok != gap_repr:
+                target_pos += 1
+                if target_pos > placement.end:
+                    break
+                in_region = placement.start <= target_pos <= placement.end
+                if not in_region:
+                    continue
+
+                current_score = score_by_pos.get(target_pos, float("-inf"))
+                if score > current_score:
+                    score_by_pos[target_pos] = score
+                    has_token_by_pos[target_pos] = (b_tok != gap_repr)
+            else:
+                continue
+
+    for has_token in has_token_by_pos.values():
+        if has_token:
+            visible += 1
+
+    return visible
