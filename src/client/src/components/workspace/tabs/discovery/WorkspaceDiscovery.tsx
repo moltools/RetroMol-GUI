@@ -19,7 +19,8 @@ import { useNotifications } from "../../NotificationProvider";
 import { Link as RouterLink } from "react-router-dom";
 import { Session } from "../../../../features/session/types";
 import { Select } from "@mui/material";
-import { QueryResult, QueryResultView } from "./QueryResultView";
+import { QueryResultView } from "./QueryResultView";
+import { QueryResult } from "./types";
 
 type WorkspaceDiscoveryProps = {
   session: Session;
@@ -51,16 +52,6 @@ export const WorkspaceDiscovery: React.FC<WorkspaceDiscoveryProps> = ({ session,
     [setSession]
   );
 
-  // Helper to build deps for import service
-  const deps = React.useMemo(
-    () => ({
-      setSession: setSessionSafe,
-      pushNotification,
-      sessionId: session.sessionId,
-    }),
-    [setSessionSafe, pushNotification, session.sessionId]
-  );
-
   // Memoized alert based on query state
   const alert = React.useMemo(() => {
     if (queryError) {
@@ -80,6 +71,7 @@ export const WorkspaceDiscovery: React.FC<WorkspaceDiscoveryProps> = ({ session,
     const params = new URLSearchParams({
       sessionId: session.sessionId,
       itemId,
+      queryAgainstUserUploads: String(queryAgainstUserUploads),
       queryAgainstCompounds: String(queryAgainstCompounds),
       queryAgainstClusters: String(queryAgainstClusters)
     });
@@ -206,7 +198,7 @@ export const WorkspaceDiscovery: React.FC<WorkspaceDiscoveryProps> = ({ session,
                   control={
                     <Checkbox
                       checked={queryAgainstClusters}
-                      disabled={queryLoading || (queryAgainstClusters && !queryAgainstCompounds)}
+                      disabled={queryLoading || (queryAgainstClusters && !queryAgainstCompounds && !queryAgainstUserUploads)}
                       onChange={(e) => setQueryAgainstClusters(e.target.checked)}
                     />
                   }
@@ -216,7 +208,7 @@ export const WorkspaceDiscovery: React.FC<WorkspaceDiscoveryProps> = ({ session,
                   control={
                     <Checkbox
                       checked={queryAgainstCompounds}
-                      disabled={queryLoading || (queryAgainstCompounds && !queryAgainstClusters)}
+                      disabled={queryLoading || (queryAgainstCompounds && !queryAgainstClusters && !queryAgainstUserUploads)}
                       onChange={(e) => setQueryAgainstCompounds(e.target.checked)}
                     />
                   }
