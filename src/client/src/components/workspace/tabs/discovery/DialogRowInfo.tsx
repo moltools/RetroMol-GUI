@@ -33,6 +33,8 @@ function referenceToUrl(ref: Reference): string | null {
   const { database_name, database_identifier } = ref;
 
   switch (database_name.toLowerCase()) {
+    case "mibig":
+      return `https://mibig.secondarymetabolites.org/repository/${database_identifier}`;
     case "npatlas":
       return `https://www.npatlas.org/explore/compounds/${database_identifier}`
     default:
