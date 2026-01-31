@@ -71,6 +71,9 @@ def ann_search(
     query_vec: list[float],
     query_against_clusters: bool,
     query_against_compounds: bool,
+    cluster_where: Sequence[Any] | None = None,
+    compound_where: Sequence[Any] | None = None,
+    limit: int | None = None,
 ) -> list[tuple[CandidateCluster | Compound, float]]:
     """
     Perform an approximate nearest neighbor search against clusters and/or compounds.
@@ -78,13 +81,19 @@ def ann_search(
     :param query_vec: the query vector
     :param query_against_clusters: whether to query against candidate clusters
     :param query_against_compounds: whether to query against compounds
+    :param cluster_where: optional extra filters for cluster query
+    :param compound_where: optional extra filters for compound query
+    :param limit: optional override for total ANN search radius
     :return: a list of tuples of (model instance, distance)
     """
     if not query_against_clusters and not query_against_compounds:
         return []
 
     only_one = query_against_clusters ^ query_against_compounds
-    per_type_limit = ANN_SEARCH_RADIUS if only_one else ANN_SEARCH_RADIUS // 2
+    effective_limit = ANN_SEARCH_RADIUS if limit is None else max(1, int(limit))
+    per_type_limit = effective_limit if only_one else max(1, effective_limit // 2)
+    cluster_filters = list(cluster_where or [])
+    compound_filters = list(compound_where or [])
 
     with SessionLocal() as session:
         _set_local(session, HNSW_SETTINGS)
@@ -95,7 +104,7 @@ def ann_search(
                 model=CandidateCluster,
                 vector_col=CandidateCluster.retromol_fp_counted_by_region,
                 query_vec=query_vec,
-                where=[CandidateCluster.retromol_fp_counted_by_region.is_not(None)],
+                where=[CandidateCluster.retromol_fp_counted_by_region.is_not(None), *cluster_filters],
                 limit=per_type_limit,
             )
             if query_against_clusters
@@ -108,7 +117,7 @@ def ann_search(
                 model=Compound,
                 vector_col=Compound.retromol_fp_counted,
                 query_vec=query_vec,
-                where=[Compound.retromol_fp_counted.is_not(None)],
+                where=[Compound.retromol_fp_counted.is_not(None), *compound_filters],
                 limit=per_type_limit,
             )
             if query_against_compounds

@@ -4,7 +4,7 @@ import type { Session, SessionItem, CompoundItem, ClusterItem } from "../session
 import { saveSession } from "../session/api";
 import { z } from "zod";
 
-export const MAX_ITEMS = 20;
+export const MAX_ITEMS = 50;
 
 const SubmitJobRespSchema = z.object({
   ok: z.boolean(),

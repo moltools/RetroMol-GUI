@@ -18,7 +18,7 @@ from helpers.guid import generate_guid
 
 blp_submit_cluster = Blueprint("submit_cluster", __name__)
 
-MAX_ITEMS = int(os.getenv("MAX_ITEMS", "20"))
+MAX_ITEMS = int(os.getenv("MAX_ITEMS", "50"))
 
 
 def _set_item_status_inplace(item: dict, status: str, error_message: str | None = None) -> None:

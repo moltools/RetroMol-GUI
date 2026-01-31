@@ -13,3 +13,4 @@ bionexus
 versalign
 scikit-learn
 umap-learn
+tqdm

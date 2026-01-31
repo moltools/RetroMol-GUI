@@ -119,6 +119,40 @@ class MSARow:
         }
 
 
+def _merge_gap_columns_between_same_block(
+    block_map: list[int | None],
+) -> list[int | None]:
+    """
+    Treat gap-only columns between identical block indices as belonging to that block.
+
+    This prevents one block from being split into multiple subseqs when only gaps
+    separate its aligned segments.
+    """
+    if not block_map:
+        return block_map
+
+    next_non_none: list[int | None] = [None] * len(block_map)
+    next_bidx: int | None = None
+    for idx in range(len(block_map) - 1, -1, -1):
+        bidx = block_map[idx]
+        if bidx is not None:
+            next_bidx = bidx
+        next_non_none[idx] = next_bidx
+
+    merged: list[int | None] = [None] * len(block_map)
+    current_bidx: int | None = None
+    for idx, bidx in enumerate(block_map):
+        if bidx is None:
+            if current_bidx is not None and next_non_none[idx] == current_bidx:
+                merged[idx] = current_bidx
+            else:
+                merged[idx] = None
+        else:
+            current_bidx = bidx
+            merged[idx] = bidx
+
+    return merged
+
 @dataclass(frozen=True)
 class MSAResult:
     """
@@ -278,7 +312,7 @@ class MSAResult:
         
         for ridx in range(1, len(rows)):
             row_tokens = rows[ridx]
-            block_map = block_maps[ridx]
+            block_map = _merge_gap_columns_between_same_block(block_maps[ridx])
             readout = retrieved_readouts[ridx - 1]
             item = retrieved_items[ridx - 1]
 

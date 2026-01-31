@@ -2,8 +2,7 @@
 
 import uuid
 import math
-from dataclasses import dataclass
-from typing import Any
+from typing import Any, Sequence
 
 from flask import current_app
 
@@ -22,23 +21,6 @@ from bionexus.db.models import CandidateCluster, Compound
 import warnings
 from Bio import BiopythonDeprecationWarning
 warnings.simplefilter("ignore", BiopythonDeprecationWarning)
-
-
-@dataclass(frozen=True)
-class _InsKey:
-    """
-    Key to uniquely identify an insertion column in docking results.
-
-    :var result_idx: index of the docking result
-    :var placement_idx: index of the placement within the docking result
-    :var col_in_region: column index within the insertion region
-    :var anchor: target position anchor for the insertion
-    """
-
-    result_idx: int
-    placement_idx: int
-    col_in_region: int
-    anchor: int  # insertion occurs AFTER this target position; -1 means before target[0]
 
 
 def _slice_alignment_to_target_region(
@@ -107,26 +89,17 @@ def merge_dockings_into_global_alignment(
     
     n = len(target)
 
-    # Collect ALL insertion columns across all dockings, anchored to a target boundary
-    # anchor = j means "insertion column occurs after target position j"
+    # Collect insertion lengths across all dockings, anchored to a target boundary
+    # anchor = j means "insertion occurs after target position j"
     # anchor = -1 means "before target[0]"
-    insertions_by_anchor: dict[int, list[_InsKey]] = {a: [] for a in range(-1, n)}
-    # We also need to later map each insertion column identity -> global column index
-    inskey_to_global_col: dict[_InsKey, int] = {}
+    insertion_lengths: dict[int, int] = {a: 0 for a in range(-1, n)}
 
-    # Also precompute mapping of target positions -> global columns (once built)
+    # Precompute mapping of target positions -> global columns (once built)
     targetpos_to_global_col: dict[int, int] = {}
 
-    # To place insertions deterministically, we'll sort them by:
-    # (result_idx, placement start, placement_idx, col_in_region)
-    # We need placement start; capture it in a side map
-    placement_start: dict[tuple[int, int], int] = {}
-
-    for ri, dr in enumerate(dockings):
+    for dr in dockings:
         placements = sorted(dr.placements, key=lambda p: (p.start, p.end))
-        for pi, p in enumerate(placements):
-            placement_start[(ri, pi)] = p.start
-
+        for p in placements:
             reg_center, reg_block = _slice_alignment_to_target_region(
                 center_aln=p.center_aln,
                 block_aln=p.block_aln,
@@ -139,34 +112,27 @@ def merge_dockings_into_global_alignment(
             # We anchor insertion columns to "after the last consumed target position"
             # Initialize target_pos to p.start - 1 so that the first consumed target sets it to p.start
             tpos = p.start - 1
-            for ci, c_tok in enumerate(reg_center):
+            insertion_offset = 0
+            for c_tok in reg_center:
                 if c_tok != gap_repr:
                     tpos += 1
+                    insertion_offset = 0
                 else:
                     # Insertion after tpos (which is in [p.start-1, .. p.end-1])
                     # If tpos == p.start-1, that's an insertion before the first consumed symbol in the region
                     anchor = tpos
                     if anchor < -1: anchor = -1
                     if anchor > n - 1: anchor = n - 1
-                    insertions_by_anchor[anchor].append(_InsKey(ri, pi, ci, anchor=anchor))
-
-    # Sort insertions at each anchor deterministically
-    for anchor, keys in insertions_by_anchor.items():
-        keys.sort(
-            key=lambda k: (
-                k.result_idx,
-                placement_start.get((k.result_idx, k.placement_idx), 10**9),
-                k.placement_idx,
-                k.col_in_region,
-            )
-        )
+                    insertion_lengths[anchor] = max(insertion_lengths[anchor], insertion_offset + 1)
+                    insertion_offset += 1
 
     # Build the global aligned center, assigning global column indices
     aligned_center: list[str] = []
+    insertion_cols_by_anchor: dict[int, list[int]] = {a: [] for a in range(-1, n)}
 
     # Insertions before target[0] (anchor -1)
-    for k in insertions_by_anchor[-1]:
-        inskey_to_global_col[k] = len(aligned_center)
+    for _ in range(insertion_lengths[-1]):
+        insertion_cols_by_anchor[-1].append(len(aligned_center))
         aligned_center.append(gap_repr)
 
     # For each target pos j: emit target[j], then insertion anchored at j
@@ -174,8 +140,8 @@ def merge_dockings_into_global_alignment(
         targetpos_to_global_col[j] = len(aligned_center)
         aligned_center.append(target[j])
 
-        for k in insertions_by_anchor[j]:
-            inskey_to_global_col[k] = len(aligned_center)
+        for _ in range(insertion_lengths[j]):
+            insertion_cols_by_anchor[j].append(len(aligned_center))
             aligned_center.append(gap_repr)
 
     aligned_target = aligned_center[:]  # same content; separate name for readability
@@ -209,20 +175,25 @@ def merge_dockings_into_global_alignment(
         )
 
         tpos = p.start - 1
-        for ci, (c_tok, b_tok) in enumerate(zip(reg_center, reg_block)):
+        insertion_offset = 0
+        for c_tok, b_tok in zip(reg_center, reg_block):
             if c_tok != gap_repr:
                 tpos += 1
                 gcol = targetpos_to_global_col[tpos]
+                insertion_offset = 0
             else:
                 # tpos should naturally be in [p.start-1, .. p.end-1], so we don't need clamping here
                 if not (-1 <= tpos <= n - 1):
                     raise ValueError("unexpected target position for insertion column")
-                key = _InsKey(ri, pi, ci, anchor=tpos)
-                # Because we sorted+assigned by identity, this must exist
-                gcol = inskey_to_global_col.get(key, None)
-                if gcol is None:
-                    # Extremely defensive fallback: skip if we somehow didn't register it
+                anchor = tpos
+                if anchor < -1: anchor = -1
+                if anchor > n - 1: anchor = n - 1
+                cols = insertion_cols_by_anchor[anchor]
+                if insertion_offset >= len(cols):
+                    insertion_offset += 1
                     continue
+                gcol = cols[insertion_offset]
+                insertion_offset += 1
 
             if b_tok == gap_repr:
                 # Keep block ownership for gap columns, but never override a real token
@@ -304,7 +275,10 @@ def cross_modal_retrieval(
     query_against_compounds: bool,
     user_uploads: list[dict[str, Any]] | None = None,
     query_name: str | None = None,
-    top_k: int = 20,
+    top_k: int = 18,
+    ann_search_limit: int | None = None,
+    cluster_where: Sequence[Any] | None = None,
+    compound_where: Sequence[Any] | None = None,
 ) -> MSAResult:
     """
     Perform cross-modal retrieval given an item payload.
@@ -316,6 +290,9 @@ def cross_modal_retrieval(
     :param user_uploads: optional list of session items to include in retrieval
     :param query_name: optional display name for the query row
     :param top_k: number of top results to return
+    :param ann_search_limit: optional override for ANN search radius
+    :param cluster_where: optional extra filters for cluster ANN query
+    :param compound_where: optional extra filters for compound ANN query
     :return: MSAResult containing the retrieval results
     :raises ValueError: if no nearest neighbors found or alignment fails
     """
@@ -328,6 +305,9 @@ def cross_modal_retrieval(
         query_vec,
         query_against_clusters=query_against_clusters,
         query_against_compounds=query_against_compounds,
+        limit=ann_search_limit,
+        cluster_where=cluster_where,
+        compound_where=compound_where,
     )
     current_app.logger.debug(f"found {len(nns)} nearest neighbors")
 
