@@ -15,7 +15,7 @@ RUN groupadd --gid $USER_GID $USERNAME \
 WORKDIR /app
 
 # System deps (psycopg binary + git)
-RUN apt-get update && apt-get install -y --no-install-recommends build-essential libpq-dev git && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential libpq-dev git libxrender1 libxext6 libsm6 && rm -rf /var/lib/apt/lists/*
 
 # Copy env + requirements before env creation for caching
 COPY src/server/environment.backend.yml /app/
