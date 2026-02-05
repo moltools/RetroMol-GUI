@@ -1,12 +1,12 @@
 import CssBaseline from "@mui/material/CssBaseline";
 import AppTheme from "../theme/AppTheme";
-import { OverlayProvider } from "../components/OverlayProvider";
-import { NotificationProvider } from "../components/NotificationProvider";
-import { Workspace } from "../components/Workspace";
+import { OverlayProvider } from "../components/workspace/OverlayProvider";
+import { NotificationProvider } from "../components/workspace/NotificationProvider";
+import { Workspace } from "../components/workspace/Workspace";
 
 interface DashboardProps {
   disableCustomTheme?: boolean;
-}
+};
 
 export default function Dashboard(props: DashboardProps) {
   return (
@@ -18,5 +18,5 @@ export default function Dashboard(props: DashboardProps) {
         </NotificationProvider>
       </OverlayProvider>
     </AppTheme>
-  )
-}
+  );
+};

@@ -1,9 +1,9 @@
 import Box from "@mui/material/Box";
 import CssBaseline from "@mui/material/CssBaseline";
 import AppTheme from "../theme/AppTheme";
-import HomeAppBar from "../components/HomeAppBar";
-import Hero from "../components/Hero";
-import Footer from "../components/Footer";
+import HomeAppBar from "../components/home/HomeAppBar";
+import Hero from "../components/home/Hero";
+import Footer from "../components/shared/Footer";
 
 export default function Home(props: { disableCustomTheme?: boolean }) {
   return (

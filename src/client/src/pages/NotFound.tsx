@@ -6,7 +6,7 @@ import CssBaseline from "@mui/material/CssBaseline";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import AppTheme from "../theme/AppTheme";
-import Footer from "../components/Footer";
+import Footer from "../components/shared/Footer";
 
 // Helper function to pad numbers with a leading zero if needed
 const pad = (num: number): string => num.toString().padStart(2, "0")

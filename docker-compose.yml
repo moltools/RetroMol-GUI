@@ -53,8 +53,10 @@ services:
       - ./docker/backend.env
     environment:
       PARAS_MODEL_PATH: ${PARAS_MODEL_PATH}
+      PFAM_HMM_DIR_PATH: ${PFAM_HMM_DIR_PATH}
     volumes:
       - ${PARAS_MODEL_HOST_PATH}:${PARAS_MODEL_PATH}:ro
+      - ${PFAM_HMM_DIR_HOST_PATH}:${PFAM_HMM_DIR_PATH}:ro
     depends_on:
       db:
         condition: service_healthy
